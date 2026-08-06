@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Moon Mood Board</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #04040f;
+      color: #e8e0f0;
+      font-family: 'Noto Serif KR', serif;
+      overflow-x: hidden;
+    }
+
+    /* 별 배경 */
+    #stars {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .star {
+      position: absolute;
+      background: #fff;
+      border-radius: 50%;
+      animation: twinkle var(--d) ease-in-out infinite alternate;
+    }
+
+    @keyframes twinkle {
+      from { opacity: 0.1; transform: scale(0.8); }
+      to   { opacity: 1;   transform: scale(1.2); }
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 60px 20px 80px;
+      text-align: center;
+    }
+
+    /* 날짜 */
+    .date-label {
+      font-size: 0.8rem;
+      letter-spacing: 3px;
+      color: #a090c0;
+      margin-bottom: 48px;
+      text-transform: uppercase;
+    }
+
+    /* 달 */
+    .moon-wrap {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 32px;
+    }
+
+    .moon {
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #fffbe6, #c8b97a 60%, #7a6030);
+      box-shadow: 0 0 60px 20px rgba(200, 185, 122, 0.25),
+                  0 0 120px 60px rgba(200, 185, 122, 0.08);
+      position: relative;
+      overflow: hidden;
+      animation: float 6s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-12px); }
+    }
+
+    /* 달 위상 그림자 오버레이 */
+    .moon-shadow {
+      position: absolute;
+      top: 0; right: 0;
+      width: 100%; height: 100%;
+      border-radius: 50%;
+      background: #04040f;
+      transform-origin: left center;
+      transition: all 0.5s ease;
+    }
+
+    /* 위상 이름 */
+    .phase-name {
+      font-size: 1.6rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #f0e6c8;
+      letter-spacing: 2px;
+    }
+
+    .phase-emoji {
+      font-size: 1rem;
+      color: #b0a080;
+      margin-bottom: 40px;
+      letter-spacing: 1px;
+    }
+
+    /* 무드 색상 팔레트 */
+    .section-title {
+      font-size: 0.72rem;
+      letter-spacing: 4px;
+      color: #7060a0;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+
+    .palette {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 48px;
+      flex-wrap: wrap;
+    }
+
+    .swatch {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      transition: transform 0.2s;
+      cursor: default;
+      position: relative;
+    }
+
+    .swatch:hover { transform: scale(1.15); }
+
+    .swatch::after {
+      content: attr(data-name);
+      position: absolute;
+      bottom: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.6rem;
+      color: #806090;
+      white-space: nowrap;
+      letter-spacing: 1px;
+    }
+
+    /* 무드 카드 */
+    .mood-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 28px 32px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+
+    .mood-card-title {
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      color: #7060a0;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+
+    .mood-card-body {
+      font-size: 1rem;
+      line-height: 1.8;
+      color: #d8d0e8;
+    }
+
+    /* 음악 추천 */
+    .music-list {
+      list-style: none;
+    }
+
+    .music-list li {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.9rem;
+      color: #c0b8d8;
+    }
+
+    .music-list li:last-child { border-bottom: none; }
+
+    .music-icon {
+      font-size: 1.1rem;
+      width: 28px;
+      text-align: center;
+    }
+
+    /* 새로고침 버튼 */
+    .refresh-btn {
+      margin-top: 40px;
+      padding: 12px 36px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 30px;
+      background: transparent;
+      color: #c0b0e0;
+      font-family: inherit;
+      font-size: 0.85rem;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .refresh-btn:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.3);
+      color: #fff;
+    }
+
+    .illumination {
+      font-size: 0.78rem;
+      color: #806090;
+      margin-top: 4px;
+      margin-bottom: 40px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="stars"></div>
+
+<div class="container">
+  <div class="date-label" id="date-label"></div>
+
+  <div class="moon-wrap">
+    <div class="moon">
+      <div class="moon-shadow" id="moon-shadow"></div>
+    </div>
+  </div>
+
+  <div class="phase-name" id="phase-name"></div>
+  <div class="phase-emoji" id="phase-emoji"></div>
+  <div class="illumination" id="illumination"></div>
+
+  <div class="section-title">오늘의 무드 팔레트</div>
+  <div class="palette" id="palette"></div>
+
+  <br><br>
+
+  <div class="mood-card">
+    <div class="mood-card-title">오늘의 분위기</div>
+    <div class="mood-card-body" id="vibe-text"></div>
+  </div>
+
+  <div class="mood-card">
+    <div class="mood-card-title">추천 음악</div>
+    <ul class="music-list" id="music-list"></ul>
+  </div>
+
+  <button class="refresh-btn" onclick="refresh()">✦ 다시 뽑기</button>
+</div>
+
+<script>
+  // 별 생성
+  const starsEl = document.getElementById('stars');
+  for (let i = 0; i < 120; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() * 2.5 + 0.5;
+    s.style.cssText = `
+      width:${size}px; height:${size}px;
+      top:${Math.random()*100}%; left:${Math.random()*100}%;
+      --d:${(Math.random()*3+2).toFixed(1)}s;
+      animation-delay:${(Math.random()*4).toFixed(1)}s;
+    `;
+    starsEl.appendChild(s);
+  }
+
+  // 달 위상 계산
+  function getMoonPhase(date) {
+    const knownNew = new Date(2000, 0, 6, 18, 14);
+    const synodic = 29.53058867;
+    const diff = (date - knownNew) / (1000 * 60 * 60 * 24);
+    let age = ((diff % synodic) + synodic) % synodic;
+    const illumination = (1 - Math.cos((age / synodic) * 2 * Math.PI)) / 2;
+    return { age, illumination };
+  }
+
+  const phases = [
+    { name: '삭 (New Moon)',        emoji: '🌑 새로운 시작의 달',      min: 0,    max: 1.85  },
+    { name: '초승달',               emoji: '🌒 가능성이 싹트는 달',    min: 1.85, max: 7.38  },
+    { name: '상현달',               emoji: '🌓 결단의 달',             min: 7.38, max: 11.08 },
+    { name: '차오르는 달',          emoji: '🌔 성장과 열정의 달',      min: 11.08,max: 14.77 },
+    { name: '보름달 (Full Moon)',   emoji: '🌕 완성과 풍요의 달',      min: 14.77,max: 16.61 },
+    { name: '기우는 달',            emoji: '🌖 감사와 성찰의 달',      min: 16.61,max: 22.15 },
+    { name: '하현달',               emoji: '🌗 내려놓음의 달',         min: 22.15,max: 25.84 },
+    { name: '그믐달',               emoji: '🌘 휴식과 정리의 달',      min: 25.84,max: 29.53 },
+  ];
+
+  const moods = {
+    '삭 (New Moon)': {
+      palette: [['#1a1a2e','심연'], ['#16213e','밤바다'], ['#0f3460','새벽'], ['#533483','보라'], ['#e94560','불꽃']],
+      vibes: [
+        '오늘은 새로운 사이클의 시작. 아직 형태가 없는 아이디어들을 조용히 품어두세요. 억지로 행동하기보다, 내면의 소리에 귀 기울이는 날입니다.',
+        '어둠 속에서 씨앗이 싹을 틔우듯, 지금 당신의 내면에서 무언가가 준비되고 있습니다. 오늘은 쉬고, 꿈꾸는 시간으로 채워보세요.',
+      ],
+      music: ['🎹 Erik Satie — Gymnopédie No.1', '🌙 Nils Frahm — Says', '🎶 Ólafur Arnalds — Near Light', '🎸 Bon Iver — Holocene'],
+    },
+    '초승달': {
+      palette: [['#2d1b4e','자주'], ['#4a2060','신비'], ['#7b5ea7','라벤더'], ['#a78bfa','보라빛'], ['#c4b5fd','연보라']],
+      vibes: [
+        '가느다란 달빛처럼, 가능성이 살며시 모습을 드러내기 시작합니다. 작은 한 걸음을 내딛기에 좋은 날. 지나치게 완벽하려 하지 말고, 일단 시작해보세요.',
+        '희망의 빛이 지평선 위에 막 떠오른 시간. 오늘 품은 의도가 앞으로의 2주를 만들어갑니다.',
+      ],
+      music: ['🎵 Aurora — Runaway', '🌸 Phoebe Bridgers — Moon Song', '🎹 Yiruma — River Flows in You', '🎶 Novo Amor — Anchor'],
+    },
+    '상현달': {
+      palette: [['#1e3a5f','깊은밤'], ['#2d6a9f','달빛'], ['#4fc3f7','하늘'], ['#81d4fa','청명'], ['#e0f7fa','새벽']],
+      vibes: [
+        '반쪽의 빛과 반쪽의 그림자. 선택의 기로에 서 있을 수 있습니다. 오늘은 지금까지의 계획을 점검하고, 조율이 필요한 부분을 정직하게 바라볼 때.',
+        '결단의 에너지가 충만한 날. 더 이상 미루지 말고 결정해야 할 것들을 처리해보세요.',
+      ],
+      music: ['🎸 Radiohead — No Surprises', '🎹 Ludovico Einaudi — Experience', '🎵 Cigarettes After Sex — Apocalypse', '🌙 The xx — Intro'],
+    },
+    '차오르는 달': {
+      palette: [['#3d1a24','장미'], ['#8b3a52','진홍'], ['#d4678a','핑크'], ['#f0a0b8','연분홍'], ['#fce4ec','벚꽃']],
+      vibes: [
+        '달이 차오를수록 에너지도 함께 높아집니다. 열정과 창의력이 넘치는 시간. 미뤄두었던 프로젝트, 만나고 싶었던 사람들을 향해 적극적으로 나아가세요.',
+        '무언가를 이루려는 욕구가 강해지는 시기. 그 에너지를 긍정적인 방향으로 집중시켜 보세요.',
+      ],
+      music: ['🎵 Florence + the Machine — Dog Days Are Over', '🎸 Hozier — Take Me to Church', '🎶 Mitski — Nobody', '🌙 Lana Del Rey — Video Games'],
+    },
+    '보름달 (Full Moon)': {
+      palette: [['#f5f0e0','달빛'], ['#e8d5a3','금빛'], ['#c8b97a','황금'], ['#a07850','대지'], ['#5a3e2b','흙']],
+      vibes: [
+        '보름달의 밤. 모든 것이 가장 밝게 빛나는 순간. 감사함을 느끼고, 그동안의 노력이 맺은 열매를 축하하는 시간입니다. 오늘 밤 창밖의 달을 꼭 올려다보세요.',
+        '에너지가 정점에 달한 날. 감정도 함께 고조될 수 있습니다. 주변 사람들과 따뜻한 시간을 나눠보세요.',
+      ],
+      music: ['🎵 Coldplay — Yellow', '🎸 Nick Drake — Pink Moon', '🎹 Chopin — Nocturne Op.9 No.2', '🌕 Cat Stevens — Moonshadow'],
+    },
+    '기우는 달': {
+      palette: [['#1a2a1a','숲'], ['#2d5a3d','초록'], ['#5a9e72','민트'], ['#8bc4a0','연두'], ['#d4eede','새싹']],
+      vibes: [
+        '달이 기울기 시작합니다. 이제는 놓아줄 것들을 놓아줄 때. 집착하고 있던 것, 더 이상 필요하지 않은 것들을 가볍게 내려두세요.',
+        '감사와 성찰의 에너지. 오늘은 일기를 쓰거나, 조용히 산책하며 마음을 정리해보세요.',
+      ],
+      music: ['🎵 Sufjan Stevens — Death with Dignity', '🌿 Bon Iver — re: Stacks', '🎹 Max Richter — On the Nature of Daylight', '🎶 Iron & Wine — Naked As We Came'],
+    },
+    '하현달': {
+      palette: [['#1a1a0f','어둠'], ['#3d3820','황토'], ['#7a6e40','카키'], ['#b0a868','올리브'], ['#d4cc9a','모래']],
+      vibes: [
+        '내려놓음의 달. 완벽하지 않아도 괜찮습니다. 과거의 결정들을 용서하고, 앞으로 나아갈 준비를 하는 시간.',
+        '삶의 리듬이 느려지는 시기. 억지로 속도를 내기보다, 지금 이 순간을 천천히 즐겨보세요.',
+      ],
+      music: ['🎵 Nick Cave — Into My Arms', '🎸 Damien Rice — The Blower\'s Daughter', '🎹 Einaudi — I Giorni', '🌙 John Frusciante — The Past Recedes'],
+    },
+    '그믐달': {
+      palette: [['#0a0a1a','무한'], ['#1a1030','심야'], ['#2a1a40','보라밤'], ['#4a3060','황혼'], ['#7a5090','여명']],
+      vibes: [
+        '사이클의 마지막. 새로운 시작을 위해 쉬어가는 시간입니다. 오늘은 무리하지 말고, 충분한 수면과 휴식을 취하세요.',
+        '어둠 속에서 다음 여정을 위한 에너지가 조용히 쌓이고 있습니다. 지금 당장 결과가 보이지 않아도 괜찮아요.',
+      ],
+      music: ['🎵 Sigur Rós — Ára bátur', '🌌 Stars of the Lid — Dopamine Clouds...', '🎹 Brian Eno — An Ending (Ascent)', '🎶 Grouper — Vital'],
+    },
+  };
+
+  function refresh() {
+    const date = new Date();
+    const { age, illumination } = getMoonPhase(date);
+
+    const phase = phases.find(p => age >= p.min && age < p.max) || phases[0];
+
+    // 날짜
+    document.getElementById('date-label').textContent =
+      date.toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+    // 위상 표시
+    document.getElementById('phase-name').textContent = phase.name;
+    document.getElementById('phase-emoji').textContent = phase.emoji;
+    document.getElementById('illumination').textContent =
+      `달 조명률 ${Math.round(illumination * 100)}% · 달령 ${age.toFixed(1)}일`;
+
+    // 달 그림자 (위상 시각화)
+    const shadow = document.getElementById('moon-shadow');
+    const pct = illumination;
+    if (age < 14.77) {
+      shadow.style.cssText = `border-radius:50%; left:${(1-pct)*100}%; width:${(1-pct)*100}%; top:0; height:100%; position:absolute; background:#04040f;`;
+    } else {
+      shadow.style.cssText = `border-radius:50%; left:0; width:${pct*100}%; top:0; height:100%; position:absolute; background:#04040f;`;
+    }
+
+    // 팔레트
+    const moodData = moods[phase.name];
+    const palette = document.getElementById('palette');
+    palette.innerHTML = '';
+    moodData.palette.forEach(([color, name]) => {
+      const sw = document.createElement('div');
+      sw.className = 'swatch';
+      sw.style.background = color;
+      sw.setAttribute('data-name', name);
+      palette.appendChild(sw);
+    });
+
+    // 분위기 텍스트 (랜덤)
+    const vibeIdx = Math.floor(Date.now() / 10000) % moodData.vibes.length;
+    document.getElementById('vibe-text').textContent = moodData.vibes[vibeIdx];
+
+    // 음악 (섞어서)
+    const music = [...moodData.music].sort(() => Math.random() - 0.5);
+    const musicList = document.getElementById('music-list');
+    musicList.innerHTML = '';
+    music.forEach(m => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="music-icon">${m.split(' ')[0]}</span>${m.split(' ').slice(1).join(' ')}`;
+      musicList.appendChild(li);
+    });
+  }
+
+  refresh();
+</script>
+</body>
+</html>
