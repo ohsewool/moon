@@ -118,6 +118,18 @@ export class WorldDO {
     } else if (m.t === 'mobhit') {
       // 플레이어의 몹 공격 — 호스트가 받아서 처리
       this.broadcast({ t: 'mobhit', i: m.i | 0, d: Math.min(10, Math.max(0, +m.d || 0)), kx: +m.kx || 0, kz: +m.kz || 0 }, ws);
+    } else if (m.t === 'sleep') {
+      // 수면 상태 알림 (호스트가 전원 취침 판정)
+      this.broadcast({ t: 'sleep', id: a.id, on: !!m.on }, ws);
+    } else if (m.t === 'timeset') {
+      // 호스트의 아침 설정 — 저장 후 전원에게 방송
+      const t0 = +m.t0;
+      if (!Number.isFinite(t0)) return;
+      await this.state.storage.put('t0', t0);
+      this.broadcast({ t: 't0', t0 }, null);
+    } else if (m.t === 'boom') {
+      // 크리퍼 폭발 연출/데미지 중계
+      this.broadcast({ t: 'boom', x: +m.x || 0, y: +m.y || 0, z: +m.z || 0 }, ws);
     }
   }
 
