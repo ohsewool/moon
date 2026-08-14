@@ -19,6 +19,7 @@
     background: #14122a; border: 1px solid #2c2a4e; border-radius: 18px;
     padding: 38px 46px; text-align: center; max-width: 480px; width: 92%;
     box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+    max-height: 92vh; overflow-y: auto;
   }
   .panel h1 { font-size: 2rem; margin-bottom: 6px; color: #f0e6c8; letter-spacing: 3px; }
   .panel .sub { font-size: 0.8rem; color: #7a6aa0; margin-bottom: 26px; letter-spacing: 1px; }
@@ -122,10 +123,18 @@
   #inv .panel { max-width: 560px; }
   #invgrid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 18px; }
   .invslot {
-    width: 56px; height: 56px; border-radius: 8px; cursor: pointer;
+    width: 50px; height: 50px; border-radius: 8px; cursor: pointer;
     background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.12);
-    position: relative;
+    position: relative; flex: none;
   }
+  #invmain { display: flex; gap: 26px; align-items: flex-start; justify-content: center; }
+  #inv-right {
+    width: 320px; max-height: 440px; overflow-y: auto; text-align: left;
+    padding-right: 6px; flex: none;
+  }
+  #inv-right::-webkit-scrollbar { width: 6px; }
+  #inv-right::-webkit-scrollbar-thumb { background: #3a3860; border-radius: 3px; }
+  .slotrow { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 510px; }
   .invslot:hover { border-color: #f0e6c8; background: rgba(240,230,200,0.14); }
   .invslot canvas { width: 100%; height: 100%; image-rendering: pixelated; }
   .invslot .tip {
@@ -235,9 +244,9 @@
     <button class="bigbtn" id="btn-start">세계로 입장</button>
     <div class="ctrl-list">
       <b>W A S D · Space</b> 이동 · 점프<br>
-      <b>마우스 좌 / 우클릭</b> 블록 부수기 / 설치<br>
-      <b>F 또는 Space 두 번</b> 비행 모드<br>
-      <b>E · T · Tab</b> 블록 선택 · 채팅 · 접속자
+      <b>마우스 좌 / 우클릭</b> 부수기 · 설치/먹기<br>
+      <b>Shift · C · Q</b> 질주 · 숨기 · 버리기<br>
+      <b>E · T · Tab</b> 인벤토리 · 채팅 · 접속자
     </div>
     <div class="links">
       <a href="/brawl.html">🎮 월광난투</a><a href="/moodboard.html">🌙 무드보드</a>
@@ -264,7 +273,9 @@
     <button class="subbtn" id="btn-invite">🔗 초대 링크 복사</button>
     <div class="ctrl-list">
       <b>W A S D</b> 이동 &nbsp; <b>Space</b> 점프<br>
-      <b>Shift</b> 질주 (비행 중엔 하강)<br>
+      <b>Shift / W 두 번</b> 질주 (비행 중 Shift = 하강)<br>
+      <b>C</b> 숨기 — 낭떠러지에서 안 떨어짐<br>
+      <b>Q</b> 든 아이템 버리기<br>
       <b>F / Space 두 번</b> 비행 켜기·끄기<br>
       <b>좌클릭 / 우클릭</b> 부수기 / 설치<br>
       <b>휠 · 1~9</b> 슬롯 선택 &nbsp; <b>휠클릭</b> 블록 스포이드<br>
@@ -278,7 +289,7 @@
 
 <!-- 인벤토리 -->
 <div class="overlay" id="inv">
-  <div class="panel" style="max-width:640px">
+  <div class="panel" style="max-width:960px">
     <h1 style="font-size:1.3rem">인벤토리</h1>
     <div class="sub">클릭 = 집기/놓기 · Shift+클릭 = 가방↔핫바 이동 (E 로 닫기)</div>
     <div id="invgrid"></div>
@@ -1212,7 +1223,9 @@ function stepPhysics(dt) {
     wx = fx * fwd + rx * str; wz = fz * fwd + rz * str;
     const l = Math.hypot(wx, wz); wx /= l; wz /= l;
   }
-  sprinting = (keysDown.ShiftLeft || sprintLatch) && fwd > 0 && !flying;
+  const sneaking = keysDown.KeyC && onGround && !flying;
+  stepPhysics.sneaking = sneaking;
+  sprinting = (keysDown.ShiftLeft || sprintLatch) && fwd > 0 && !flying && !sneaking;
   const inWater = waterAt(pos.x, pos.y + 0.4, pos.z);
   const wasInWater = stepPhysics._w || false;
   if (inWater && !wasInWater && vel.y < -4) snd.splash();
@@ -1226,7 +1239,7 @@ function stepPhysics(dt) {
     vel.z += (wz * spd - vel.z) * k;
     vel.y += (wy * spd - vel.y) * k;
   } else {
-    const spd = (sprinting ? PL.sprint : PL.walk) * (inWater ? 0.55 : 1);
+    const spd = (sneaking ? PL.walk * 0.35 : sprinting ? PL.sprint : PL.walk) * (inWater ? 0.55 : 1);
     const k = 1 - Math.exp(-(onGround ? 13 : 3.2) * dt);
     vel.x += (wx * spd - vel.x) * k;
     vel.z += (wz * spd - vel.z) * k;
@@ -1248,8 +1261,18 @@ function stepPhysics(dt) {
   else fallPeak = pos.y;
   onGround = false;
   moveAxis(1, vel.y * dt);
-  moveAxis(0, vel.x * dt);
-  moveAxis(2, vel.z * dt);
+  // 숨기: 낭떠러지 밖으로 안 나감
+  if (sneaking && wasGround) {
+    const preX = pos.x;
+    moveAxis(0, vel.x * dt);
+    if (!groundBelow()) { pos.x = preX; vel.x = 0; }
+    const preZ = pos.z;
+    moveAxis(2, vel.z * dt);
+    if (!groundBelow()) { pos.z = preZ; vel.z = 0; }
+  } else {
+    moveAxis(0, vel.x * dt);
+    moveAxis(2, vel.z * dt);
+  }
   if (onGround && !wasGround && !inWater) {
     const fall = fallPeak - pos.y;
     if (fall > 3.5) damage(Math.round(fall - 3), '추락');
@@ -1270,6 +1293,13 @@ function stepPhysics(dt) {
 }
 function sprintingF() { return keysDown.KeyW; }
 
+function groundBelow() {
+  const y = Math.floor(pos.y - 0.05);
+  for (let bx = Math.floor(pos.x - PL.hw); bx <= Math.ceil(pos.x + PL.hw) - 1; bx++)
+  for (let bz = Math.floor(pos.z - PL.hw); bz <= Math.ceil(pos.z + PL.hw) - 1; bz++)
+    if (BLOCKS[getB(bx, y, bz)].solid) return true;
+  return false;
+}
 function findSpawn() {
   const c = WSIZE / 2;
   for (let r = 0; r < 100; r += 3) {
@@ -1595,11 +1625,13 @@ function buildChestUI() {
   const cg = $('chestgrid'), ig = $('chestinv');
   cg.innerHTML = ''; ig.innerHTML = '';
   const cWrap = document.createElement('div');
-  cWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:580px;margin:0 auto';
+  cWrap.className = 'slotrow';
+  cWrap.style.margin = '0 auto';
   for (let i = 0; i < 27; i++) cWrap.appendChild(chestSlotEl(openChest.slots, i, invSlots));
   cg.appendChild(cWrap);
   const iWrap = document.createElement('div');
-  iWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:580px;margin:0 auto';
+  iWrap.className = 'slotrow';
+  iWrap.style.margin = '0 auto';
   for (let i = 0; i < INV_SIZE; i++) iWrap.appendChild(chestSlotEl(invSlots, i, openChest.slots));
   ig.appendChild(iWrap);
   updateChestGhost();
@@ -1724,14 +1756,17 @@ function doPick() {
 
 // ── 떨어진 아이템 ──
 const drops = [];
-function spawnDrop(x, y, z, id, n) {
+function spawnDrop(x, y, z, id, n, opt) {
   const c = document.createElement('canvas'); c.width = c.height = 24;
   drawItemIcon(c.getContext('2d'), id, 12, 12, 6);
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
   s.scale.set(0.4, 0.4, 1);
   s.position.set(x, y, z);
   scene.add(s);
-  drops.push({ s, v: new THREE.Vector3((Math.random()-0.5)*2, 3, (Math.random()-0.5)*2), id, n, age: 0 });
+  const v = opt && opt.vx !== undefined
+    ? new THREE.Vector3(opt.vx, opt.vy, opt.vz)
+    : new THREE.Vector3((Math.random()-0.5)*2, 3, (Math.random()-0.5)*2);
+  drops.push({ s, v, id, n, d: opt && opt.d != null ? opt.d : null, age: opt && opt.delay ? -opt.delay + 0.4 : 0 });
   if (drops.length > 80) { const old = drops.shift(); scene.remove(old.s); }
 }
 function updateDrops(dt) {
@@ -1757,7 +1792,11 @@ function updateDrops(dt) {
         d.v.set(0, 0, 0);
       }
       if (d2 < 0.7) {
-        addItem(d.id, d.n);
+        if (d.d != null) { // 내구도 있는 도구는 그대로 복원
+          const e = invSlots.indexOf(null);
+          if (e >= 0) { invSlots[e] = { id: d.id, n: 1, d: d.d }; drawHotbar(); drawHand(); }
+          else { addItem(d.id, d.n); }
+        } else addItem(d.id, d.n);
         snd.pop();
         scene.remove(d.s);
         drops.splice(i, 1);
@@ -2731,6 +2770,8 @@ function buildInv() {
   const grid = $('invgrid');
   grid.innerHTML = '';
   if (!survival) {
+    const wrap = document.createElement('div');
+    wrap.className = 'slotrow';
     BLOCKS.forEach((bl, id) => {
       if (!bl.inv) return;
       const d = document.createElement('div');
@@ -2740,11 +2781,12 @@ function buildInv() {
       const tip = document.createElement('div'); tip.className = 'tip'; tip.textContent = bl.name;
       d.appendChild(c); d.appendChild(tip);
       d.onclick = () => { invSlots[selSlot] = { id, n: 1 }; setSel(selSlot); closeInv(); snd.blip(); };
-      grid.appendChild(d);
+      wrap.appendChild(d);
     });
+    grid.appendChild(wrap);
     return;
   }
-  // ── 서바이벌: 36칸 그리드 (가방 27 + 핫바 9) ──
+  // ── 서바이벌: 왼쪽 인벤토리(가방27+핫바9) / 오른쪽 제작 목록 ──
   const makeSlot = idx => {
     const s = invSlots[idx];
     const d = document.createElement('div');
@@ -2763,39 +2805,49 @@ function buildInv() {
     d.onclick = e => slotClick(idx, e.shiftKey);
     return d;
   };
+  const main = document.createElement('div');
+  main.id = 'invmain';
+
+  const left = document.createElement('div');
   const bagWrap = document.createElement('div');
-  bagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:580px';
+  bagWrap.className = 'slotrow';
   for (let i = 9; i < INV_SIZE; i++) bagWrap.appendChild(makeSlot(i));
-  grid.appendChild(bagWrap);
+  left.appendChild(bagWrap);
   const div = document.createElement('div');
   div.style.cssText = 'width:100%;height:1px;background:rgba(255,255,255,0.12);margin:10px 0';
-  grid.appendChild(div);
+  left.appendChild(div);
   const barWrap = document.createElement('div');
-  barWrap.style.cssText = 'display:flex;gap:6px;justify-content:center';
+  barWrap.className = 'slotrow';
   for (let i = 0; i < 9; i++) barWrap.appendChild(makeSlot(i));
-  grid.appendChild(barWrap);
-  updateCursorGhost();
-  // ── 제작 ──
-  const crafts = document.createElement('div');
-  crafts.className = 'crafts';
-  crafts.style.width = '100%';
-  const ttl = document.createElement('div'); ttl.className = 'ttl'; ttl.textContent = '✦ 제작';
-  crafts.appendChild(ttl);
+  left.appendChild(barWrap);
+  main.appendChild(left);
+
+  // ── 제작 (만들 수 있는 것부터 정렬, 스크롤) ──
+  const right = document.createElement('div');
+  right.id = 'inv-right';
+  const ttl = document.createElement('div'); ttl.className = 'ttl';
+  ttl.style.cssText = 'font-size:0.72rem;color:#8a7ab0;letter-spacing:2px;margin-bottom:8px';
+  ttl.textContent = '✦ 제작';
+  right.appendChild(ttl);
   const hasFurnace = nearFurnace();
-  for (const r of RECIPES) {
+  const canCraft = r => r.ins.every(([id, n]) => countOf(id) >= n) && (!r.furnace || hasFurnace);
+  const sorted = [...RECIPES].sort((a, b) => canCraft(b) - canCraft(a));
+  for (const r of sorted) {
+    const ok = canCraft(r);
     const row = document.createElement('div'); row.className = 'recipe';
-    const c = document.createElement('canvas'); c.width = c.height = 34;
-    drawItemIcon(c.getContext('2d'), r.out[0], 17, 17, 8);
+    if (!ok) row.style.opacity = 0.55;
+    const c = document.createElement('canvas'); c.width = c.height = 30;
+    drawItemIcon(c.getContext('2d'), r.out[0], 15, 15, 7);
     const body = document.createElement('div'); body.className = 'rbody';
     const nm = document.createElement('div'); nm.className = 'rname';
     nm.textContent = (r.furnace ? '🔥 ' : '') + `${itemName(r.out[0])} ×${r.out[1]}`;
     const cost = document.createElement('div'); cost.className = 'rcost';
-    cost.textContent = (r.furnace && !hasFurnace ? '⚠ 화로 근처에서만 · ' : '') +
-      '필요: ' + r.ins.map(([id, n]) => `${itemName(id)} ×${n}`).join(', ');
+    cost.textContent = (r.furnace && !hasFurnace ? '⚠ 화로 필요 · ' : '') +
+      r.ins.map(([id, n]) => `${itemName(id)} ${n}`).join(' + ');
     body.appendChild(nm); body.appendChild(cost);
     const btn = document.createElement('button');
-    btn.textContent = '만들기';
-    btn.disabled = !r.ins.every(([id, n]) => countOf(id) >= n) || (r.furnace && !hasFurnace);
+    btn.textContent = '제작';
+    btn.disabled = !ok;
     btn.onclick = () => {
       if (btn.disabled) return;
       r.ins.forEach(([id, n]) => takeItem(id, n));
@@ -2804,9 +2856,11 @@ function buildInv() {
       buildInv(); // 갱신
     };
     row.appendChild(c); row.appendChild(body); row.appendChild(btn);
-    crafts.appendChild(row);
+    right.appendChild(row);
   }
-  grid.appendChild(crafts);
+  main.appendChild(right);
+  grid.appendChild(main);
+  updateCursorGhost();
 }
 
 // ═════════════════ UI: 채팅 ═════════════════
@@ -2898,6 +2952,19 @@ document.addEventListener('keydown', e => {
     const now = performance.now();
     if (now - lastWTap < 260) sprintLatch = true; // W 두 번 = 질주
     lastWTap = now;
+  }
+  if (e.code === 'KeyQ' && locked && survival && !dead && !e.repeat) { // 아이템 버리기
+    const s = heldItem();
+    if (s) {
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      spawnDrop(pos.x + dir.x, pos.y + 1.4, pos.z + dir.z, s.id, 1,
+                { vx: dir.x * 7, vy: 2.5 + dir.y * 4, vz: dir.z * 7, delay: 1.6, d: s.d });
+      s.n--;
+      if (s.n <= 0) invSlots[selSlot] = null;
+      drawHotbar(); drawHand();
+      snd.swing();
+    }
   }
   if (e.code === 'KeyE') { if (chestOpen) closeChest(); else if (invOpen) closeInv(); else if (locked) openInv(); }
   if ((e.code === 'KeyT' || e.code === 'Enter') && locked) { openChat(); e.preventDefault(); }
@@ -3146,7 +3213,7 @@ function frame(now) {
 
   // 카메라
   const bob = (locked && onGround && Math.hypot(vel.x, vel.z) > 1.2) ? Math.sin(bobPhase) * 0.045 : 0;
-  camera.position.set(pos.x, pos.y + PL.eye + bob, pos.z);
+  camera.position.set(pos.x, pos.y + PL.eye + bob - (stepPhysics.sneaking ? 0.14 : 0), pos.z);
   const targetFov = sprinting || (flying && sprintingF() && (keysDown.KeyW)) ? 82 : 75;
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 8);
   camera.updateProjectionMatrix();
