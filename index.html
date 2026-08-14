@@ -1,421 +1,906 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Moon Mood Board</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600&display=swap');
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      min-height: 100vh;
-      background: #04040f;
-      color: #e8e0f0;
-      font-family: 'Noto Serif KR', serif;
-      overflow-x: hidden;
-    }
-
-    /* 별 배경 */
-    #stars {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: 0;
-      pointer-events: none;
-    }
-
-    .star {
-      position: absolute;
-      background: #fff;
-      border-radius: 50%;
-      animation: twinkle var(--d) ease-in-out infinite alternate;
-    }
-
-    @keyframes twinkle {
-      from { opacity: 0.1; transform: scale(0.8); }
-      to   { opacity: 1;   transform: scale(1.2); }
-    }
-
-    .container {
-      position: relative;
-      z-index: 1;
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 60px 20px 80px;
-      text-align: center;
-    }
-
-    /* 날짜 */
-    .date-label {
-      font-size: 0.8rem;
-      letter-spacing: 3px;
-      color: #a090c0;
-      margin-bottom: 48px;
-      text-transform: uppercase;
-    }
-
-    /* 달 */
-    .moon-wrap {
-      position: relative;
-      display: inline-block;
-      margin-bottom: 32px;
-    }
-
-    .moon {
-      width: 180px;
-      height: 180px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 35% 35%, #fffbe6, #c8b97a 60%, #7a6030);
-      box-shadow: 0 0 60px 20px rgba(200, 185, 122, 0.25),
-                  0 0 120px 60px rgba(200, 185, 122, 0.08);
-      position: relative;
-      overflow: hidden;
-      animation: float 6s ease-in-out infinite;
-    }
-
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50%       { transform: translateY(-12px); }
-    }
-
-    /* 달 위상 그림자 오버레이 */
-    .moon-shadow {
-      position: absolute;
-      top: 0; right: 0;
-      width: 100%; height: 100%;
-      border-radius: 50%;
-      background: #04040f;
-      transform-origin: left center;
-      transition: all 0.5s ease;
-    }
-
-    /* 위상 이름 */
-    .phase-name {
-      font-size: 1.6rem;
-      font-weight: 600;
-      margin-bottom: 8px;
-      color: #f0e6c8;
-      letter-spacing: 2px;
-    }
-
-    .phase-emoji {
-      font-size: 1rem;
-      color: #b0a080;
-      margin-bottom: 40px;
-      letter-spacing: 1px;
-    }
-
-    /* 무드 색상 팔레트 */
-    .section-title {
-      font-size: 0.72rem;
-      letter-spacing: 4px;
-      color: #7060a0;
-      margin-bottom: 16px;
-      text-transform: uppercase;
-    }
-
-    .palette {
-      display: flex;
-      justify-content: center;
-      gap: 12px;
-      margin-bottom: 48px;
-      flex-wrap: wrap;
-    }
-
-    .swatch {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-      transition: transform 0.2s;
-      cursor: default;
-      position: relative;
-    }
-
-    .swatch:hover { transform: scale(1.15); }
-
-    .swatch::after {
-      content: attr(data-name);
-      position: absolute;
-      bottom: -22px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 0.6rem;
-      color: #806090;
-      white-space: nowrap;
-      letter-spacing: 1px;
-    }
-
-    /* 무드 카드 */
-    .mood-card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 20px;
-      padding: 28px 32px;
-      margin-bottom: 24px;
-      text-align: left;
-    }
-
-    .mood-card-title {
-      font-size: 0.65rem;
-      letter-spacing: 3px;
-      color: #7060a0;
-      margin-bottom: 12px;
-      text-transform: uppercase;
-    }
-
-    .mood-card-body {
-      font-size: 1rem;
-      line-height: 1.8;
-      color: #d8d0e8;
-    }
-
-    /* 음악 추천 */
-    .music-list {
-      list-style: none;
-    }
-
-    .music-list li {
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 0.9rem;
-      color: #c0b8d8;
-    }
-
-    .music-list li:last-child { border-bottom: none; }
-
-    .music-icon {
-      font-size: 1.1rem;
-      width: 28px;
-      text-align: center;
-    }
-
-    /* 새로고침 버튼 */
-    .refresh-btn {
-      margin-top: 40px;
-      padding: 12px 36px;
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 30px;
-      background: transparent;
-      color: #c0b0e0;
-      font-family: inherit;
-      font-size: 0.85rem;
-      letter-spacing: 2px;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .refresh-btn:hover {
-      background: rgba(255,255,255,0.08);
-      border-color: rgba(255,255,255,0.3);
-      color: #fff;
-    }
-
-    .illumination {
-      font-size: 0.78rem;
-      color: #806090;
-      margin-top: 4px;
-      margin-bottom: 40px;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>월광난투 — Moonlight Brawl</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #04040f; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; font-family: 'Segoe UI', sans-serif; }
+  canvas { display: block; background: #04040f; }
+  .corner {
+    position: fixed; right: 14px; bottom: 12px; z-index: 10;
+    color: #6a5a90; font-size: 12px; text-decoration: none; letter-spacing: 1px;
+    opacity: 0.7; transition: opacity 0.2s;
+  }
+  .corner:hover { opacity: 1; color: #c0b0e0; }
+</style>
 </head>
 <body>
-
-<div id="stars"></div>
-
-<div class="container">
-  <div class="date-label" id="date-label"></div>
-
-  <div class="moon-wrap">
-    <div class="moon">
-      <div class="moon-shadow" id="moon-shadow"></div>
-    </div>
-  </div>
-
-  <div class="phase-name" id="phase-name"></div>
-  <div class="phase-emoji" id="phase-emoji"></div>
-  <div class="illumination" id="illumination"></div>
-
-  <div class="section-title">오늘의 무드 팔레트</div>
-  <div class="palette" id="palette"></div>
-
-  <br><br>
-
-  <div class="mood-card">
-    <div class="mood-card-title">오늘의 분위기</div>
-    <div class="mood-card-body" id="vibe-text"></div>
-  </div>
-
-  <div class="mood-card">
-    <div class="mood-card-title">추천 음악</div>
-    <ul class="music-list" id="music-list"></ul>
-  </div>
-
-  <button class="refresh-btn" onclick="refresh()">✦ 다시 뽑기</button>
-</div>
+<canvas id="cv" width="1280" height="720"></canvas>
+<a class="corner" href="moodboard.html">🌙 무드보드 보기</a>
 
 <script>
-  // 별 생성
-  const starsEl = document.getElementById('stars');
-  for (let i = 0; i < 120; i++) {
-    const s = document.createElement('div');
-    s.className = 'star';
-    const size = Math.random() * 2.5 + 0.5;
-    s.style.cssText = `
-      width:${size}px; height:${size}px;
-      top:${Math.random()*100}%; left:${Math.random()*100}%;
-      --d:${(Math.random()*3+2).toFixed(1)}s;
-      animation-delay:${(Math.random()*4).toFixed(1)}s;
-    `;
-    starsEl.appendChild(s);
-  }
+'use strict';
+const cv = document.getElementById('cv'), cx = cv.getContext('2d');
+const W = 1280, H = 720;
 
-  // 달 위상 계산
-  function getMoonPhase(date) {
-    const knownNew = new Date(2000, 0, 6, 18, 14);
-    const synodic = 29.53058867;
-    const diff = (date - knownNew) / (1000 * 60 * 60 * 24);
-    let age = ((diff % synodic) + synodic) % synodic;
-    const illumination = (1 - Math.cos((age / synodic) * 2 * Math.PI)) / 2;
-    return { age, illumination };
-  }
+function fitCanvas() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  cv.style.width = (W * s) + 'px';
+  cv.style.height = (H * s) + 'px';
+}
+addEventListener('resize', fitCanvas); fitCanvas();
 
-  const phases = [
-    { name: '삭 (New Moon)',        emoji: '🌑 새로운 시작의 달',      min: 0,    max: 1.85  },
-    { name: '초승달',               emoji: '🌒 가능성이 싹트는 달',    min: 1.85, max: 7.38  },
-    { name: '상현달',               emoji: '🌓 결단의 달',             min: 7.38, max: 11.08 },
-    { name: '차오르는 달',          emoji: '🌔 성장과 열정의 달',      min: 11.08,max: 14.77 },
-    { name: '보름달 (Full Moon)',   emoji: '🌕 완성과 풍요의 달',      min: 14.77,max: 16.61 },
-    { name: '기우는 달',            emoji: '🌖 감사와 성찰의 달',      min: 16.61,max: 22.15 },
-    { name: '하현달',               emoji: '🌗 내려놓음의 달',         min: 22.15,max: 25.84 },
-    { name: '그믐달',               emoji: '🌘 휴식과 정리의 달',      min: 25.84,max: 29.53 },
-  ];
+// ───────── 입력 (e.code 사용: 한글 IME 영향 없음) ─────────
+const keys = {}; let prevKeys = {};
+const BLOCK = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'];
+addEventListener('keydown', e => {
+  if (BLOCK.includes(e.code)) e.preventDefault();
+  keys[e.code] = true; initAudio();
+});
+addEventListener('keyup', e => { delete keys[e.code]; });
+const kd = c => !!keys[c];
+const jp = c => !!keys[c] && !prevKeys[c];
+const jpAny = arr => arr.some(jp);
+const kdAny = arr => arr.some(kd);
 
-  const moods = {
-    '삭 (New Moon)': {
-      palette: [['#1a1a2e','심연'], ['#16213e','밤바다'], ['#0f3460','새벽'], ['#533483','보라'], ['#e94560','불꽃']],
-      vibes: [
-        '오늘은 새로운 사이클의 시작. 아직 형태가 없는 아이디어들을 조용히 품어두세요. 억지로 행동하기보다, 내면의 소리에 귀 기울이는 날입니다.',
-        '어둠 속에서 씨앗이 싹을 틔우듯, 지금 당신의 내면에서 무언가가 준비되고 있습니다. 오늘은 쉬고, 꿈꾸는 시간으로 채워보세요.',
-      ],
-      music: ['🎹 Erik Satie — Gymnopédie No.1', '🌙 Nils Frahm — Says', '🎶 Ólafur Arnalds — Near Light', '🎸 Bon Iver — Holocene'],
-    },
-    '초승달': {
-      palette: [['#2d1b4e','자주'], ['#4a2060','신비'], ['#7b5ea7','라벤더'], ['#a78bfa','보라빛'], ['#c4b5fd','연보라']],
-      vibes: [
-        '가느다란 달빛처럼, 가능성이 살며시 모습을 드러내기 시작합니다. 작은 한 걸음을 내딛기에 좋은 날. 지나치게 완벽하려 하지 말고, 일단 시작해보세요.',
-        '희망의 빛이 지평선 위에 막 떠오른 시간. 오늘 품은 의도가 앞으로의 2주를 만들어갑니다.',
-      ],
-      music: ['🎵 Aurora — Runaway', '🌸 Phoebe Bridgers — Moon Song', '🎹 Yiruma — River Flows in You', '🎶 Novo Amor — Anchor'],
-    },
-    '상현달': {
-      palette: [['#1e3a5f','깊은밤'], ['#2d6a9f','달빛'], ['#4fc3f7','하늘'], ['#81d4fa','청명'], ['#e0f7fa','새벽']],
-      vibes: [
-        '반쪽의 빛과 반쪽의 그림자. 선택의 기로에 서 있을 수 있습니다. 오늘은 지금까지의 계획을 점검하고, 조율이 필요한 부분을 정직하게 바라볼 때.',
-        '결단의 에너지가 충만한 날. 더 이상 미루지 말고 결정해야 할 것들을 처리해보세요.',
-      ],
-      music: ['🎸 Radiohead — No Surprises', '🎹 Ludovico Einaudi — Experience', '🎵 Cigarettes After Sex — Apocalypse', '🌙 The xx — Intro'],
-    },
-    '차오르는 달': {
-      palette: [['#3d1a24','장미'], ['#8b3a52','진홍'], ['#d4678a','핑크'], ['#f0a0b8','연분홍'], ['#fce4ec','벚꽃']],
-      vibes: [
-        '달이 차오를수록 에너지도 함께 높아집니다. 열정과 창의력이 넘치는 시간. 미뤄두었던 프로젝트, 만나고 싶었던 사람들을 향해 적극적으로 나아가세요.',
-        '무언가를 이루려는 욕구가 강해지는 시기. 그 에너지를 긍정적인 방향으로 집중시켜 보세요.',
-      ],
-      music: ['🎵 Florence + the Machine — Dog Days Are Over', '🎸 Hozier — Take Me to Church', '🎶 Mitski — Nobody', '🌙 Lana Del Rey — Video Games'],
-    },
-    '보름달 (Full Moon)': {
-      palette: [['#f5f0e0','달빛'], ['#e8d5a3','금빛'], ['#c8b97a','황금'], ['#a07850','대지'], ['#5a3e2b','흙']],
-      vibes: [
-        '보름달의 밤. 모든 것이 가장 밝게 빛나는 순간. 감사함을 느끼고, 그동안의 노력이 맺은 열매를 축하하는 시간입니다. 오늘 밤 창밖의 달을 꼭 올려다보세요.',
-        '에너지가 정점에 달한 날. 감정도 함께 고조될 수 있습니다. 주변 사람들과 따뜻한 시간을 나눠보세요.',
-      ],
-      music: ['🎵 Coldplay — Yellow', '🎸 Nick Drake — Pink Moon', '🎹 Chopin — Nocturne Op.9 No.2', '🌕 Cat Stevens — Moonshadow'],
-    },
-    '기우는 달': {
-      palette: [['#1a2a1a','숲'], ['#2d5a3d','초록'], ['#5a9e72','민트'], ['#8bc4a0','연두'], ['#d4eede','새싹']],
-      vibes: [
-        '달이 기울기 시작합니다. 이제는 놓아줄 것들을 놓아줄 때. 집착하고 있던 것, 더 이상 필요하지 않은 것들을 가볍게 내려두세요.',
-        '감사와 성찰의 에너지. 오늘은 일기를 쓰거나, 조용히 산책하며 마음을 정리해보세요.',
-      ],
-      music: ['🎵 Sufjan Stevens — Death with Dignity', '🌿 Bon Iver — re: Stacks', '🎹 Max Richter — On the Nature of Daylight', '🎶 Iron & Wine — Naked As We Came'],
-    },
-    '하현달': {
-      palette: [['#1a1a0f','어둠'], ['#3d3820','황토'], ['#7a6e40','카키'], ['#b0a868','올리브'], ['#d4cc9a','모래']],
-      vibes: [
-        '내려놓음의 달. 완벽하지 않아도 괜찮습니다. 과거의 결정들을 용서하고, 앞으로 나아갈 준비를 하는 시간.',
-        '삶의 리듬이 느려지는 시기. 억지로 속도를 내기보다, 지금 이 순간을 천천히 즐겨보세요.',
-      ],
-      music: ['🎵 Nick Cave — Into My Arms', '🎸 Damien Rice — The Blower\'s Daughter', '🎹 Einaudi — I Giorni', '🌙 John Frusciante — The Past Recedes'],
-    },
-    '그믐달': {
-      palette: [['#0a0a1a','무한'], ['#1a1030','심야'], ['#2a1a40','보라밤'], ['#4a3060','황혼'], ['#7a5090','여명']],
-      vibes: [
-        '사이클의 마지막. 새로운 시작을 위해 쉬어가는 시간입니다. 오늘은 무리하지 말고, 충분한 수면과 휴식을 취하세요.',
-        '어둠 속에서 다음 여정을 위한 에너지가 조용히 쌓이고 있습니다. 지금 당장 결과가 보이지 않아도 괜찮아요.',
-      ],
-      music: ['🎵 Sigur Rós — Ára bátur', '🌌 Stars of the Lid — Dopamine Clouds...', '🎹 Brian Eno — An Ending (Ascent)', '🎶 Grouper — Vital'],
-    },
+// ───────── 오디오 (Web Audio 합성) ─────────
+let AC = null;
+function initAudio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } }
+function tone(freq, dur, type = 'sine', vol = 0.15, slide = 0) {
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, AC.currentTime);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), AC.currentTime + dur);
+  g.gain.setValueAtTime(vol, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+  o.connect(g); g.connect(AC.destination);
+  o.start(); o.stop(AC.currentTime + dur);
+}
+function noiseBurst(dur, vol = 0.2) {
+  if (!AC) return;
+  const n = AC.sampleRate * dur, buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const s = AC.createBufferSource(), g = AC.createGain();
+  s.buffer = buf; g.gain.value = vol;
+  s.connect(g); g.connect(AC.destination); s.start();
+}
+const sfx = {
+  jump: () => tone(300, 0.12, 'square', 0.06, 250),
+  hit: p => { noiseBurst(0.08, 0.18); tone(160 + p * 0.8, 0.12, 'sawtooth', 0.1, -80); },
+  ko: () => { noiseBurst(0.4, 0.3); tone(400, 0.55, 'sawtooth', 0.2, -360); },
+  blip: () => tone(520, 0.07, 'square', 0.07),
+  go: () => tone(780, 0.2, 'square', 0.1, 200),
+  perk: () => { tone(523, 0.1, 'sine', 0.1); setTimeout(() => tone(659, 0.1, 'sine', 0.1), 90); setTimeout(() => tone(784, 0.16, 'sine', 0.1), 180); },
+  shield: () => tone(900, 0.25, 'triangle', 0.12, -500),
+};
+
+// ───────── 데이터 ─────────
+const CHARS = [
+  { emoji: '🐇', name: '달토끼', desc: '균형 잡힌 만능형', spd: 1.0, pow: 1.0, wgt: 1.0, jumps: 2, r: 24 },
+  { emoji: '🦊', name: '별여우', desc: '빠르지만 가벼움', spd: 1.28, pow: 0.82, wgt: 0.82, jumps: 2, r: 21 },
+  { emoji: '🐢', name: '현무', desc: '느리지만 강력함', spd: 0.78, pow: 1.32, wgt: 1.38, jumps: 2, r: 29 },
+  { emoji: '🦉', name: '야부엉', desc: '삼단 점프의 달인', spd: 0.98, pow: 0.92, wgt: 0.9, jumps: 3, r: 23 },
+];
+const PCFG = [
+  { label: 'P1', color: '#4fc3f7', left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', atk: ['KeyF', 'KeyG'], help: '이동 A/D · 점프 W · 아래 S · 공격 F' },
+  { label: 'P2', color: '#f87171', left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', atk: ['Period', 'Slash'], help: '이동 ←/→ · 점프 ↑ · 아래 ↓ · 공격 . (마침표)' },
+  { label: 'P3', color: '#fbbf24', left: 'KeyJ', right: 'KeyL', up: 'KeyI', down: 'KeyK', atk: ['KeyO', 'Semicolon'], help: '이동 J/L · 점프 I · 아래 K · 공격 O' },
+];
+const PERKS = [
+  { id: 'spd',   icon: '💨', name: '질풍신뢰', desc: '이동 속도 +15%',            apply: p => p.spdMul *= 1.15 },
+  { id: 'pow',   icon: '💪', name: '괴력',     desc: '공격력 +15%',              apply: p => p.powMul *= 1.15 },
+  { id: 'wgt',   icon: '🛡️', name: '강골',     desc: '밀려나는 거리 -15%',       apply: p => p.wgtMul *= 1.18 },
+  { id: 'cd',    icon: '⚡', name: '연속베기', desc: '공격 쿨타임 -25%',         apply: p => p.cdMul *= 0.75 },
+  { id: 'jump3', icon: '🕊️', name: '허공답보', desc: '공중 점프 +1회',           apply: p => p.extraJumps += 1 },
+  { id: 'leech', icon: '🌙', name: '흡성대법', desc: '타격 시 내 피해 4% 회복',  apply: p => p.leech += 4 },
+  { id: 'spike', icon: '☄️', name: '유성추',   desc: '공중 ↓+공격 = 내리찍기',   apply: p => p.spike = true, unique: true },
+  { id: 'thorn', icon: '🌵', name: '가시갑옷', desc: '나를 때린 상대 피해 +5%',  apply: p => p.thorns += 5 },
+  { id: 'shield',icon: '✨', name: '별의가호', desc: '라운드마다 첫 피격 무효',  apply: p => p.shieldPerk = true, unique: true },
+  { id: 'range', icon: '🗡️', name: '월광장검', desc: '공격 범위 +25%',           apply: p => p.rangeMul *= 1.25 },
+  { id: 'jmp',   icon: '🦵', name: '경공술',   desc: '점프력 +12%',              apply: p => p.jumpMul *= 1.12 },
+  { id: 'giant', icon: '🌕', name: '거인화',   desc: '몸집·공격력 증가, 잘 맞음', apply: p => { p.sizeMul *= 1.15; p.powMul *= 1.1; } },
+];
+const PLATFORMS = [
+  { x: 150, y: 560, w: 980, drop: false },
+  { x: 300, y: 425, w: 200, drop: true },
+  { x: 780, y: 425, w: 200, drop: true },
+  { x: 565, y: 315, w: 150, drop: true },
+];
+const SPAWNS = [[340, 480], [640, 480], [940, 480]];
+const GRAV = 0.42, FALLCAP = 13, WINS_NEEDED = 3, STOCKS = 2;
+
+// ───────── 배경 요소 ─────────
+const stars = [];
+for (let i = 0; i < 150; i++) stars.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.6 + 0.4, ph: Math.random() * 6.28, sp: 0.02 + Math.random() * 0.04 });
+let shooting = [];
+
+// ───────── 상태 ─────────
+let state = 'menu';
+let slots = [
+  { type: 1, char: 0 },  // 0=off 1=human 2=ai
+  { type: 2, char: 1 },
+  { type: 0, char: 2 },
+];
+let players = [], roundNum = 1, frame = 0;
+let hitstop = 0, slowmo = 0, shakeT = 0, shakeDur = 1, shakeMag = 0;
+let countdownT = 0, goT = 0, bannerT = 0, bannerText = '', bannerEmoji = '';
+let particles = [], dmgNums = [];
+let blessing = null, matchWinner = null, deathOrder = [];
+
+function shake(t, m) { shakeT = t; shakeDur = t; shakeMag = Math.max(shakeMag, m); }
+
+// ───────── 플레이어 ─────────
+function makePlayer(slotIdx) {
+  const slot = slots[slotIdx], ch = CHARS[slot.char], cfg = PCFG[slotIdx];
+  return {
+    idx: slotIdx, cfg, ch, ai: slot.type === 2,
+    x: 0, y: 0, vx: 0, vy: 0, dir: 1,
+    dmg: 0, stocks: STOCKS, wins: 0, kos: 0,
+    onGround: false, airJumps: 0, stun: 0, inv: 0, hover: 0,
+    atkCD: 0, atkWind: 0, atkActive: 0, atkAnim: 0, atkAim: 0, hitSet: null, aimMode: 'side',
+    dropT: 0, out: false, deadT: 0, lastHitBy: null, shieldUp: false,
+    // 퍽 스탯
+    perks: [], spdMul: 1, powMul: 1, wgtMul: 1, cdMul: 1, rangeMul: 1, jumpMul: 1, sizeMul: 1,
+    extraJumps: 0, leech: 0, thorns: 0, spike: false, shieldPerk: false,
+    in: { l: 0, r: 0, u: 0, d: 0, a: 0 }, pin: { l: 0, r: 0, u: 0, d: 0, a: 0 },
+    aiState: { t: 0, wantJump: false, dodge: 0 },
   };
+}
+const R = p => p.ch.r * p.sizeMul;
+const SPD = p => 5.4 * p.ch.spd * p.spdMul;
+const POW = p => p.ch.pow * p.powMul;
+const WGT = p => p.ch.wgt * p.wgtMul;
+const RANGE = p => (R(p) + 34) * p.rangeMul;
+const MAXJ = p => p.ch.jumps + p.extraJumps;
 
-  function refresh() {
-    const date = new Date();
-    const { age, illumination } = getMoonPhase(date);
+// ───────── 흐름 ─────────
+function startMatch() {
+  players = [];
+  slots.forEach((s, i) => { if (s.type > 0) players.push(makePlayer(i)); });
+  roundNum = 1; matchWinner = null;
+  players.forEach(p => { p.wins = 0; p.kos = 0; });
+  startRound();
+}
+function startRound() {
+  deathOrder = [];
+  players.forEach((p, i) => {
+    const sp = SPAWNS[players.length === 2 ? i + (i > 0 ? 1 : 0) : i];
+    p.x = sp[0]; p.y = sp[1] - R(p); p.vx = 0; p.vy = 0;
+    p.dmg = 0; p.stocks = STOCKS; p.out = false; p.deadT = 0;
+    p.stun = 0; p.inv = 0; p.hover = 0; p.atkCD = 0; p.atkActive = 0; p.atkAnim = 0;
+    p.dir = p.x < W / 2 ? 1 : -1;
+    p.shieldUp = p.shieldPerk;
+  });
+  particles = []; dmgNums = [];
+  state = 'countdown'; countdownT = 165; goT = 0;
+}
+function endRoundCheck() {
+  const alive = players.filter(p => !p.out);
+  if (alive.length > 1) return;
+  const winner = alive[0] || deathOrder[deathOrder.length - 1];
+  winner.wins++;
+  slowmo = 45;
+  bannerT = 130; bannerEmoji = winner.ch.emoji;
+  if (winner.wins >= WINS_NEEDED) {
+    bannerText = `${winner.ch.name} 최종 승리!`;
+    matchWinner = winner;
+  } else {
+    bannerText = `${winner.ch.name} 라운드 승리!`;
+  }
+  state = 'roundend';
+}
+function setupBlessing() {
+  const winner = players.reduce((a, b) => a.wins >= b.wins ? a : b);
+  const roundWinner = players.find(p => !p.out) || deathOrder[deathOrder.length - 1];
+  const pickers = players.filter(p => p !== roundWinner).map(p => {
+    const owned = new Set(p.perks.map(pk => pk.id));
+    const pool = PERKS.filter(pk => !(pk.unique && owned.has(pk.id)));
+    const cards = [];
+    const bag = [...pool];
+    for (let i = 0; i < 3 && bag.length; i++) cards.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
+    return { p, cards, sel: 1, done: false, aiT: 70 + Math.random() * 50 };
+  });
+  blessing = { pickers };
+  state = 'blessing';
+}
 
-    const phase = phases.find(p => age >= p.min && age < p.max) || phases[0];
+// ───────── AI ─────────
+function aiThink(p) {
+  const a = p.aiState;
+  const foes = players.filter(o => o !== p && !o.out && o.deadT <= 0);
+  p.in = { l: 0, r: 0, u: 0, d: 0, a: 0 };
+  if (!foes.length) return;
+  let t = foes[0], best = 1e9;
+  foes.forEach(f => { const d = Math.abs(f.x - p.x) + Math.abs(f.y - p.y) * 0.6; if (d < best) { best = d; t = f; } });
+  const dx = t.x - p.x, dy = t.y - p.y;
+  const feet = p.y + R(p);
+  const onStage = p.x > 150 && p.x < 1130;
 
-    // 날짜
-    document.getElementById('date-label').textContent =
-      date.toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+  // 복귀 최우선
+  if (!onStage || feet > 600) {
+    if (p.x < W / 2) p.in.r = 1; else p.in.l = 1;
+    if (p.vy > 1 && (p.airJumps > 0 || p.onGround)) p.in.u = 1;
+    return;
+  }
+  a.t--;
+  if (a.t <= 0) { a.t = 8 + Math.random() * 10; a.dodge = Math.random() < 0.12 ? 20 : 0; }
+  // 접근
+  if (a.dodge > 0) { a.dodge--; if (dx > 0) p.in.l = 1; else p.in.r = 1; }
+  else if (Math.abs(dx) > 46) { if (dx > 0) p.in.r = 1; else p.in.l = 1; }
+  // 점프 판단
+  if (p.onGround && dy < -70 && Math.random() < 0.08) p.in.u = 1;
+  if (!p.onGround && p.vy > 0 && dy < -50 && p.airJumps > 0 && Math.random() < 0.05) p.in.u = 1;
+  // 공격
+  if (Math.abs(dx) < RANGE(p) + 14 && Math.abs(dy) < 56 && p.atkCD <= 0) {
+    p.dir = dx >= 0 ? 1 : -1;
+    p.in.a = 1;
+    if (dy < -26) p.in.u = 0, p.in.uAim = 1;
+  }
+  // 내리찍기
+  if (p.spike && !p.onGround && dy > 40 && Math.abs(dx) < 40 && p.atkCD <= 0) { p.in.d = 1; p.in.a = 1; }
+}
 
-    // 위상 표시
-    document.getElementById('phase-name').textContent = phase.name;
-    document.getElementById('phase-emoji').textContent = phase.emoji;
-    document.getElementById('illumination').textContent =
-      `달 조명률 ${Math.round(illumination * 100)}% · 달령 ${age.toFixed(1)}일`;
+// ───────── 전투 처리 ─────────
+function tryAttack(p) {
+  if (p.atkCD > 0 || p.stun > 0) return;
+  p.atkCD = Math.round(28 * p.cdMul);
+  p.atkWind = 2;
+  p.hitSet = new Set();
+  const upHold = p.in.u || p.in.uAim, dnHold = p.in.d;
+  if (p.spike && !p.onGround && dnHold) p.aimMode = 'spike';
+  else if (upHold) p.aimMode = 'up';
+  else p.aimMode = 'side';
+  p.atkAnim = 13;
+}
+function aimVec(p) {
+  if (p.aimMode === 'spike') return [0, 1];
+  if (p.aimMode === 'up') return [p.dir * 0.4, -0.92];
+  return [p.dir, -0.1];
+}
+function applyHit(att, vic) {
+  if (vic.inv > 0) return;
+  if (vic.shieldUp) {
+    vic.shieldUp = false; sfx.shield();
+    burst(vic.x, vic.y, '#a0e8ff', 18, 4);
+    dmgNums.push({ x: vic.x, y: vic.y - R(vic) - 12, txt: '보호막!', t: 50, color: '#a0e8ff' });
+    hitstop = 5; return;
+  }
+  const dmgAmt = Math.round((8 + Math.random() * 3) * POW(att));
+  vic.dmg += dmgAmt;
+  vic.lastHitBy = att;
+  if (att.leech > 0) att.dmg = Math.max(0, att.dmg - att.leech);
+  if (vic.thorns > 0) att.dmg += vic.thorns;
+  let kb = Math.min(30, (4.5 + vic.dmg * 0.12) * POW(att) / WGT(vic));
+  const dirX = vic.x >= att.x ? 1 : -1;
+  if (att.aimMode === 'spike' && !vic.onGround) {
+    vic.vx = dirX * kb * 0.25; vic.vy = kb * 0.95;
+  } else if (att.aimMode === 'up') {
+    vic.vx = dirX * kb * 0.45; vic.vy = -kb * 1.0;
+  } else {
+    vic.vx = dirX * kb; vic.vy = -kb * 0.6;
+  }
+  vic.stun = 9 + kb * 1.1;
+  vic.onGround = false;
+  hitstop = 6; shake(8, 4 + kb * 0.35);
+  burst(vic.x, vic.y, att.cfg.color, 12, 5);
+  dmgNums.push({ x: vic.x, y: vic.y - R(vic) - 10, txt: dmgAmt + '%', t: 45, color: dmgColor(vic.dmg) });
+  sfx.hit(vic.dmg);
+}
+function dmgColor(d) {
+  if (d < 50) return '#ffffff';
+  if (d < 90) return '#fbbf24';
+  if (d < 130) return '#fb7185';
+  return '#ef4444';
+}
+function doKO(p) {
+  p.stocks--;
+  sfx.ko(); shake(22, 14); hitstop = 10;
+  const ex = Math.max(30, Math.min(W - 30, p.x)), ey = Math.max(30, Math.min(H - 30, p.y));
+  burst(ex, ey, p.cfg.color, 40, 9);
+  burst(ex, ey, '#ffffff', 20, 7);
+  if (p.lastHitBy) p.lastHitBy.kos++;
+  if (p.stocks > 0) {
+    p.deadT = 55;
+  } else {
+    p.out = true;
+    deathOrder.push(p);
+  }
+}
+function respawn(p) {
+  p.x = W / 2; p.y = 60; p.vx = 0; p.vy = 0;
+  p.dmg = 0; p.stun = 0; p.inv = 130; p.hover = 42;
+  p.airJumps = MAXJ(p) - 1;
+  burst(p.x, p.y, '#ffffff', 14, 3);
+}
 
-    // 달 그림자 (위상 시각화)
-    const shadow = document.getElementById('moon-shadow');
-    const pct = illumination;
-    if (age < 14.77) {
-      shadow.style.cssText = `border-radius:50%; left:${(1-pct)*100}%; width:${(1-pct)*100}%; top:0; height:100%; position:absolute; background:#04040f;`;
-    } else {
-      shadow.style.cssText = `border-radius:50%; left:0; width:${pct*100}%; top:0; height:100%; position:absolute; background:#04040f;`;
+// ───────── 파티클 ─────────
+function burst(x, y, color, n, spd) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 6.28, s = Math.random() * spd + 1;
+    particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, max: 24 + Math.random() * 22, color, size: 1.5 + Math.random() * 3, grav: 0.12 });
+  }
+}
+function dust(x, y, n = 4) {
+  for (let i = 0; i < n; i++) particles.push({ x: x + (Math.random() - 0.5) * 16, y, vx: (Math.random() - 0.5) * 1.6, vy: -Math.random() * 1.2, t: 0, max: 18 + Math.random() * 10, color: '#8a8aa0', size: 1.5 + Math.random() * 2, grav: -0.005 });
+}
+
+// ───────── 물리 & 전투 업데이트 ─────────
+function updateWorld() {
+  if (hitstop > 0) { hitstop--; return; }
+
+  players.forEach(p => {
+    if (p.out) return;
+    if (p.deadT > 0) { p.deadT--; if (p.deadT === 0) respawn(p); return; }
+
+    // 입력
+    p.pin = { ...p.in };
+    if (p.ai) aiThink(p);
+    else {
+      const c = p.cfg;
+      p.in = { l: kd(c.left) ? 1 : 0, r: kd(c.right) ? 1 : 0, u: kd(c.up) ? 1 : 0, d: kd(c.down) ? 1 : 0, a: kdAny(c.atk) ? 1 : 0 };
+    }
+    const jpu = p.in.u && !p.pin.u, jpa = p.in.a && !p.pin.a, jpd = p.in.d && !p.pin.d;
+
+    if (p.inv > 0) p.inv--;
+    if (p.atkCD > 0) p.atkCD--;
+    if (p.atkAnim > 0) p.atkAnim--;
+    if (p.dropT > 0) p.dropT--;
+
+    // 호버 (리스폰 직후)
+    if (p.hover > 0) {
+      p.hover--;
+      p.y += Math.sin(frame * 0.15) * 0.4;
+      if (p.in.l || p.in.r || jpu) p.hover = 0;
+      return;
     }
 
-    // 팔레트
-    const moodData = moods[phase.name];
-    const palette = document.getElementById('palette');
-    palette.innerHTML = '';
-    moodData.palette.forEach(([color, name]) => {
-      const sw = document.createElement('div');
-      sw.className = 'swatch';
-      sw.style.background = color;
-      sw.setAttribute('data-name', name);
-      palette.appendChild(sw);
-    });
+    const stunned = p.stun > 0;
+    if (stunned) p.stun--;
 
-    // 분위기 텍스트 (랜덤)
-    const vibeIdx = Math.floor(Date.now() / 10000) % moodData.vibes.length;
-    document.getElementById('vibe-text').textContent = moodData.vibes[vibeIdx];
+    // 이동
+    if (!stunned) {
+      const acc = 0.9 * p.ch.spd;
+      if (p.in.l) { p.vx -= acc; p.dir = -1; }
+      if (p.in.r) { p.vx += acc; p.dir = 1; }
+      const mx = SPD(p);
+      if (p.vx > mx) p.vx = mx; if (p.vx < -mx) p.vx = -mx;
+      if (!p.in.l && !p.in.r) p.vx *= p.onGround ? 0.78 : 0.97;
 
-    // 음악 (섞어서)
-    const music = [...moodData.music].sort(() => Math.random() - 0.5);
-    const musicList = document.getElementById('music-list');
-    musicList.innerHTML = '';
-    music.forEach(m => {
-      const li = document.createElement('li');
-      li.innerHTML = `<span class="music-icon">${m.split(' ')[0]}</span>${m.split(' ').slice(1).join(' ')}`;
-      musicList.appendChild(li);
-    });
+      // 점프
+      if (jpu) {
+        if (p.onGround) {
+          p.vy = -11.2 * p.jumpMul; p.onGround = false; sfx.jump(); dust(p.x, p.y + R(p), 6);
+        } else if (p.airJumps > 0) {
+          p.airJumps--; p.vy = -10.2 * p.jumpMul; sfx.jump();
+          burst(p.x, p.y + R(p) * 0.7, '#e8e0ff', 8, 2.5);
+        }
+      }
+      // 아래로 통과
+      if (jpd && p.onGround && p.curPlat && p.curPlat.drop) {
+        p.dropT = 12; p.onGround = false; p.y += 5;
+      }
+      // 공격
+      if (jpa) tryAttack(p);
+    } else {
+      p.vx *= 0.985;
+    }
+
+    // 중력
+    p.vy += GRAV;
+    if (p.vy > FALLCAP) p.vy = FALLCAP;
+
+    const prevFeet = p.y + R(p);
+    p.x += p.vx; p.y += p.vy;
+    const feet = p.y + R(p);
+
+    // 착지
+    const wasAir = !p.onGround;
+    p.onGround = false; p.curPlat = null;
+    if (p.vy >= 0 && p.dropT <= 0) {
+      for (const pl of PLATFORMS) {
+        if (prevFeet <= pl.y + 5 && feet >= pl.y && p.x > pl.x - 6 && p.x < pl.x + pl.w + 6) {
+          p.y = pl.y - R(p); p.vy = 0; p.onGround = true; p.curPlat = pl;
+          p.airJumps = MAXJ(p) - 1;
+          if (wasAir) dust(p.x, pl.y, 5);
+          break;
+        }
+      }
+    }
+
+    // 달리기 먼지
+    if (p.onGround && Math.abs(p.vx) > 3 && frame % 6 === 0) dust(p.x - p.dir * R(p) * 0.5, p.y + R(p), 1);
+
+    // 공격 판정
+    if (p.atkWind > 0) { p.atkWind--; if (p.atkWind === 0) p.atkActive = 7; }
+    else if (p.atkActive > 0) {
+      p.atkActive--;
+      const [ax, ay] = aimVec(p);
+      const range = RANGE(p);
+      const hx = p.x + ax * range * 0.6, hy = p.y + ay * range * 0.6;
+      players.forEach(v => {
+        if (v === p || v.out || v.deadT > 0 || p.hitSet.has(v.idx)) return;
+        const dx = v.x - hx, dy = v.y - hy;
+        if (dx * dx + dy * dy < Math.pow(range * 0.85 + R(v), 2)) {
+          p.hitSet.add(v.idx);
+          applyHit(p, v);
+        }
+      });
+    }
+
+    // 낙사 판정
+    if (p.x < -70 || p.x > W + 70 || p.y > H + 70 || p.y < -320) {
+      doKO(p);
+    }
+  });
+
+  // 파티클
+  particles = particles.filter(pt => {
+    pt.t++; pt.x += pt.vx; pt.y += pt.vy; pt.vy += pt.grav; pt.vx *= 0.97;
+    return pt.t < pt.max;
+  });
+  dmgNums = dmgNums.filter(d => { d.t--; d.y -= 0.7; return d.t > 0; });
+
+  if (state === 'fight') endRoundCheck();
+}
+
+// ───────── 그리기 ─────────
+function drawBG() {
+  const g = cx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#05040f'); g.addColorStop(0.7, '#0a0918'); g.addColorStop(1, '#0e0c20');
+  cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+  // 별
+  stars.forEach(s => {
+    const tw = 0.35 + 0.65 * Math.abs(Math.sin(s.ph + frame * s.sp));
+    cx.globalAlpha = tw;
+    cx.fillStyle = '#fff';
+    cx.beginPath(); cx.arc(s.x, s.y, s.r, 0, 6.28); cx.fill();
+  });
+  cx.globalAlpha = 1;
+  // 유성
+  if (Math.random() < 0.004) shooting.push({ x: Math.random() * W, y: -10, vx: -(3 + Math.random() * 4), vy: 4 + Math.random() * 3, t: 0 });
+  shooting = shooting.filter(s => {
+    s.x += s.vx; s.y += s.vy; s.t++;
+    cx.strokeStyle = 'rgba(255,255,255,0.6)'; cx.lineWidth = 1.5;
+    cx.beginPath(); cx.moveTo(s.x, s.y); cx.lineTo(s.x - s.vx * 5, s.y - s.vy * 5); cx.stroke();
+    return s.t < 80 && s.y < H;
+  });
+  // 지구
+  const eg = cx.createRadialGradient(1055, 118, 8, 1060, 125, 52);
+  eg.addColorStop(0, '#7fc4e8'); eg.addColorStop(0.55, '#3a7ab8'); eg.addColorStop(1, '#1a3a6a');
+  cx.fillStyle = eg;
+  cx.beginPath(); cx.arc(1060, 125, 48, 0, 6.28); cx.fill();
+  cx.fillStyle = 'rgba(80,160,90,0.5)';
+  cx.beginPath(); cx.ellipse(1045, 112, 16, 9, 0.5, 0, 6.28); cx.fill();
+  cx.beginPath(); cx.ellipse(1075, 140, 12, 7, -0.4, 0, 6.28); cx.fill();
+  cx.fillStyle = 'rgba(255,255,255,0.16)';
+  cx.beginPath(); cx.ellipse(1050, 130, 22, 8, 0.3, 0, 6.28); cx.fill();
+}
+function drawStage() {
+  const m = PLATFORMS[0];
+  // 본체 암석
+  const rg = cx.createLinearGradient(0, m.y, 0, H);
+  rg.addColorStop(0, '#3c3c50'); rg.addColorStop(0.25, '#26263a'); rg.addColorStop(1, '#12121e');
+  cx.fillStyle = rg;
+  cx.beginPath();
+  cx.moveTo(m.x, m.y);
+  cx.lineTo(m.x + m.w, m.y);
+  cx.lineTo(m.x + m.w - 45, H);
+  cx.lineTo(m.x + 45, H);
+  cx.closePath(); cx.fill();
+  // 표면
+  cx.fillStyle = '#b8b8cc';
+  cx.fillRect(m.x, m.y - 4, m.w, 10);
+  // 크레이터
+  const craters = [[280, 22], [430, 14], [620, 28], [790, 12], [960, 20], [1080, 15]];
+  craters.forEach(([cxx, cr]) => {
+    cx.fillStyle = '#9090a8';
+    cx.beginPath(); cx.ellipse(cxx, m.y + 1, cr, cr * 0.28, 0, 0, 6.28); cx.fill();
+    cx.fillStyle = '#6a6a85';
+    cx.beginPath(); cx.ellipse(cxx, m.y + 2, cr * 0.7, cr * 0.18, 0, 0, 6.28); cx.fill();
+  });
+  // 부유 플랫폼
+  for (let i = 1; i < PLATFORMS.length; i++) {
+    const pl = PLATFORMS[i];
+    cx.fillStyle = 'rgba(167,139,250,0.16)';
+    cx.beginPath(); cx.roundRect(pl.x - 4, pl.y - 5, pl.w + 8, 16, 8); cx.fill();
+    cx.fillStyle = 'rgba(200,180,255,0.85)';
+    cx.beginPath(); cx.roundRect(pl.x, pl.y - 2, pl.w, 6, 3); cx.fill();
+    const sx = pl.x + (frame * 1.3 + i * 137) % pl.w;
+    cx.fillStyle = 'rgba(255,255,255,0.6)';
+    cx.beginPath(); cx.arc(sx, pl.y, 1.5, 0, 6.28); cx.fill();
+  }
+}
+function drawPlayer(p) {
+  if (p.out || p.deadT > 0) return;
+  const r = R(p);
+  if (p.inv > 0 && Math.floor(frame / 4) % 2 === 0) cx.globalAlpha = 0.35;
+
+  // 그림자
+  let shadowY = null;
+  for (const pl of PLATFORMS) {
+    if (p.x > pl.x && p.x < pl.x + pl.w && pl.y >= p.y + r - 2) { shadowY = pl.y; break; }
+  }
+  if (shadowY !== null) {
+    const dist = Math.min(1, (shadowY - p.y) / 300);
+    cx.fillStyle = `rgba(0,0,0,${0.35 * (1 - dist * 0.7)})`;
+    cx.beginPath(); cx.ellipse(p.x, shadowY + 3, r * (1 - dist * 0.4), r * 0.22, 0, 0, 6.28); cx.fill();
   }
 
-  refresh();
+  // 스턴 시 흔들림
+  const wob = p.stun > 0 ? Math.sin(frame * 1.4) * 2 : 0;
+
+  // 링
+  cx.strokeStyle = p.cfg.color; cx.lineWidth = 3;
+  cx.globalAlpha *= 0.9;
+  cx.beginPath(); cx.arc(p.x + wob, p.y, r + 4, 0, 6.28); cx.stroke();
+  cx.globalAlpha = p.inv > 0 && Math.floor(frame / 4) % 2 === 0 ? 0.35 : 1;
+
+  // 보호막
+  if (p.shieldUp) {
+    cx.strokeStyle = 'rgba(160,232,255,0.8)'; cx.lineWidth = 2;
+    cx.setLineDash([6, 5]); cx.lineDashOffset = -frame * 0.4;
+    cx.beginPath(); cx.arc(p.x, p.y, r + 10, 0, 6.28); cx.stroke();
+    cx.setLineDash([]);
+  }
+
+  // 몸통 (이모지)
+  cx.font = `${r * 2}px serif`;
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.save();
+  cx.translate(p.x + wob, p.y);
+  if (p.dir === -1) cx.scale(-1, 1);
+  cx.fillText(p.ch.emoji, 0, 2);
+  cx.restore();
+
+  // 초승달 베기 이펙트
+  if (p.atkAnim > 0) {
+    const a = p.atkAnim / 13;
+    const [ax, ay] = aimVec(p);
+    const ang = Math.atan2(ay, ax);
+    const range = RANGE(p);
+    cx.save();
+    cx.translate(p.x, p.y);
+    cx.strokeStyle = `rgba(240,235,255,${a * 0.9})`;
+    cx.lineWidth = 2 + 8 * a;
+    cx.lineCap = 'round';
+    cx.beginPath(); cx.arc(0, 0, range * 0.85, ang - 0.85, ang + 0.85); cx.stroke();
+    cx.strokeStyle = `rgba(167,139,250,${a * 0.55})`;
+    cx.lineWidth = 1 + 3 * a;
+    cx.beginPath(); cx.arc(0, 0, range * 0.95, ang - 0.65, ang + 0.65); cx.stroke();
+    cx.restore();
+  }
+
+  // 라벨
+  cx.font = 'bold 11px sans-serif';
+  cx.fillStyle = p.cfg.color;
+  cx.fillText(p.ai ? p.cfg.label + '·AI' : p.cfg.label, p.x, p.y - r - 14);
+  cx.globalAlpha = 1;
+
+  // 화면 위 이탈 표시
+  if (p.y < -20) {
+    cx.fillStyle = p.cfg.color;
+    cx.beginPath();
+    cx.moveTo(p.x, 10); cx.lineTo(p.x - 9, 26); cx.lineTo(p.x + 9, 26);
+    cx.closePath(); cx.fill();
+    cx.font = '13px sans-serif';
+    cx.fillText(Math.round(-p.y) + 'm', p.x, 40);
+  }
+}
+function drawParticles() {
+  particles.forEach(pt => {
+    cx.globalAlpha = 1 - pt.t / pt.max;
+    cx.fillStyle = pt.color;
+    cx.beginPath(); cx.arc(pt.x, pt.y, pt.size * (1 - pt.t / pt.max * 0.5), 0, 6.28); cx.fill();
+  });
+  cx.globalAlpha = 1;
+  dmgNums.forEach(d => {
+    cx.globalAlpha = Math.min(1, d.t / 15);
+    cx.font = 'bold 20px sans-serif'; cx.textAlign = 'center';
+    cx.strokeStyle = 'rgba(0,0,0,0.7)'; cx.lineWidth = 3;
+    cx.strokeText(d.txt, d.x, d.y);
+    cx.fillStyle = d.color; cx.fillText(d.txt, d.x, d.y);
+  });
+  cx.globalAlpha = 1;
+}
+function drawHUD() {
+  const n = players.length, cw = 200, gap = 20;
+  const total = n * cw + (n - 1) * gap, sx = (W - total) / 2;
+  players.forEach((p, i) => {
+    const x = sx + i * (cw + gap), y = H - 78;
+    cx.fillStyle = 'rgba(10,10,25,0.75)';
+    cx.beginPath(); cx.roundRect(x, y, cw, 64, 12); cx.fill();
+    cx.strokeStyle = p.cfg.color; cx.lineWidth = p.out ? 1 : 2;
+    cx.globalAlpha = p.out ? 0.35 : 1;
+    cx.beginPath(); cx.roundRect(x, y, cw, 64, 12); cx.stroke();
+    // 이모지
+    cx.font = '30px serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillText(p.ch.emoji, x + 28, y + 32);
+    // 데미지
+    cx.font = 'bold 26px sans-serif';
+    cx.fillStyle = p.out ? '#555' : dmgColor(p.dmg);
+    cx.textAlign = 'left';
+    cx.fillText(p.out ? 'OUT' : Math.round(p.dmg) + '%', x + 56, y + 26);
+    // 스톡 (달)
+    for (let s = 0; s < STOCKS; s++) {
+      cx.font = '13px serif';
+      cx.globalAlpha *= s < p.stocks ? 1 : 0.18;
+      cx.fillText('🌕', x + 58 + s * 18, y + 48);
+      cx.globalAlpha = p.out ? 0.35 : 1;
+    }
+    // 라운드 승수
+    for (let wI = 0; wI < WINS_NEEDED; wI++) {
+      cx.fillStyle = wI < p.wins ? p.cfg.color : 'rgba(255,255,255,0.15)';
+      cx.beginPath(); cx.arc(x + cw - 20 - wI * 14, y + 14, 4.5, 0, 6.28); cx.fill();
+    }
+    // 퍽 개수
+    if (p.perks.length) {
+      cx.fillStyle = '#c0b0e0'; cx.font = '11px sans-serif'; cx.textAlign = 'right';
+      cx.fillText('✦×' + p.perks.length, x + cw - 12, y + 50);
+    }
+    cx.globalAlpha = 1;
+  });
+  // 라운드 표시
+  cx.font = 'bold 13px sans-serif'; cx.textAlign = 'center'; cx.fillStyle = '#6a5a90';
+  cx.fillText(`ROUND ${roundNum} · ${WINS_NEEDED}라운드 선취 승리`, W / 2, 22);
+}
+function drawBannerText() {
+  if (bannerT <= 0) return;
+  const a = Math.min(1, bannerT / 25, (130 - bannerT) / 12);
+  cx.globalAlpha = Math.max(0, a);
+  cx.fillStyle = 'rgba(5,5,15,0.6)';
+  cx.fillRect(0, H / 2 - 70, W, 140);
+  cx.font = '52px serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.fillText(bannerEmoji, W / 2, H / 2 - 26);
+  cx.font = 'bold 34px sans-serif';
+  cx.fillStyle = '#f0e6c8';
+  cx.fillText(bannerText, W / 2, H / 2 + 30);
+  cx.globalAlpha = 1;
+}
+
+// ───────── 메뉴 ─────────
+function updateMenu() {
+  slots.forEach((s, i) => {
+    const c = PCFG[i];
+    if (jp(c.up)) { s.type = (s.type + 1) % 3; sfx.blip(); }
+    if (s.type > 0) {
+      if (jp(c.left)) { s.char = (s.char + CHARS.length - 1) % CHARS.length; sfx.blip(); }
+      if (jp(c.right)) { s.char = (s.char + 1) % CHARS.length; sfx.blip(); }
+    }
+  });
+  const active = slots.filter(s => s.type > 0).length;
+  if (jp('Enter') && active >= 2) { sfx.go(); startMatch(); }
+}
+function drawMenu() {
+  drawBG(); drawStage();
+  // 타이틀
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.font = '64px serif';
+  cx.fillText('🌕', W / 2, 92);
+  cx.font = 'bold 54px sans-serif';
+  const tg = cx.createLinearGradient(0, 130, 0, 190);
+  tg.addColorStop(0, '#f5f0e0'); tg.addColorStop(1, '#a78bfa');
+  cx.fillStyle = tg;
+  cx.fillText('월광난투', W / 2, 165);
+  cx.font = '15px sans-serif'; cx.fillStyle = '#8a7ab0';
+  cx.fillText('M O O N L I G H T   B R A W L', W / 2, 202);
+
+  // 슬롯 카드
+  const cw2 = 320, gap = 40, sx = (W - cw2 * 3 - gap * 2) / 2;
+  slots.forEach((s, i) => {
+    const x = sx + i * (cw2 + gap), y = 250, c = PCFG[i], ch = CHARS[s.char];
+    cx.fillStyle = s.type > 0 ? 'rgba(20,18,40,0.85)' : 'rgba(12,12,24,0.6)';
+    cx.beginPath(); cx.roundRect(x, y, cw2, 240, 16); cx.fill();
+    cx.strokeStyle = s.type > 0 ? c.color : 'rgba(255,255,255,0.1)';
+    cx.lineWidth = 2;
+    cx.beginPath(); cx.roundRect(x, y, cw2, 240, 16); cx.stroke();
+
+    cx.fillStyle = c.color; cx.font = 'bold 15px sans-serif';
+    cx.fillText(c.label + (s.type === 0 ? '' : s.type === 1 ? ' — 플레이어' : ' — AI'), x + cw2 / 2, y + 26);
+
+    if (s.type === 0) {
+      cx.fillStyle = '#555'; cx.font = '14px sans-serif';
+      cx.fillText('꺼짐', x + cw2 / 2, y + 120);
+      cx.fillStyle = '#6a5a90'; cx.font = '12px sans-serif';
+      cx.fillText(`${keyName(c.up)} 키로 참가`, x + cw2 / 2, y + 150);
+    } else {
+      cx.font = '58px serif';
+      cx.fillText(ch.emoji, x + cw2 / 2, y + 88);
+      cx.font = 'bold 19px sans-serif'; cx.fillStyle = '#f0e6c8';
+      cx.fillText('◀  ' + ch.name + '  ▶', x + cw2 / 2, y + 138);
+      cx.font = '12px sans-serif'; cx.fillStyle = '#9a8ab8';
+      cx.fillText(ch.desc, x + cw2 / 2, y + 160);
+      // 스탯 바
+      const stats = [['속도', ch.spd / 1.3], ['힘', ch.pow / 1.35], ['무게', ch.wgt / 1.4]];
+      stats.forEach(([nm, v], si) => {
+        const by = y + 184 + si * 16;
+        cx.font = '10px sans-serif'; cx.fillStyle = '#7a6aa0'; cx.textAlign = 'left';
+        cx.fillText(nm, x + 30, by);
+        cx.fillStyle = 'rgba(255,255,255,0.08)';
+        cx.fillRect(x + 66, by - 4, 220, 7);
+        cx.fillStyle = c.color;
+        cx.fillRect(x + 66, by - 4, 220 * Math.min(1, v), 7);
+        cx.textAlign = 'center';
+      });
+    }
+  });
+
+  // 조작법
+  cx.font = '12px sans-serif'; cx.fillStyle = '#7a6aa0';
+  PCFG.forEach((c, i) => cx.fillText(c.label + ' : ' + c.help, W / 2, 528 + i * 19));
+  cx.fillStyle = '#5a4a80';
+  cx.fillText('점프 키 = 참가 / AI / 끄기 전환 · 이동 키 = 캐릭터 선택 · ↑+공격 = 띄우기', W / 2, 596);
+  cx.fillText('상대를 낭떠러지 밖으로 밀어내세요! 데미지가 쌓일수록 멀리 날아갑니다 · 라운드 패자는 별의 축복(강화)을 얻습니다', W / 2, 615);
+
+  const active = slots.filter(s => s.type > 0).length;
+  cx.font = 'bold 20px sans-serif';
+  cx.fillStyle = active >= 2 ? (Math.floor(frame / 25) % 2 ? '#f0e6c8' : '#a78bfa') : '#444';
+  cx.fillText(active >= 2 ? 'Enter — 대전 시작!' : '2명 이상 참가해야 합니다', W / 2, 668);
+}
+function keyName(code) {
+  const m = { KeyW: 'W', ArrowUp: '↑', KeyI: 'I' };
+  return m[code] || code;
+}
+
+// ───────── 축복(퍽) 화면 ─────────
+function updateBlessing() {
+  blessing.pickers.forEach(pk => {
+    if (pk.done) return;
+    if (pk.p.ai) {
+      pk.aiT--;
+      if (pk.aiT % 30 === 0 && pk.aiT > 20) { pk.sel = Math.floor(Math.random() * pk.cards.length); sfx.blip(); }
+      if (pk.aiT <= 0) confirmPick(pk);
+    } else {
+      const c = pk.p.cfg;
+      if (jp(c.left)) { pk.sel = (pk.sel + pk.cards.length - 1) % pk.cards.length; sfx.blip(); }
+      if (jp(c.right)) { pk.sel = (pk.sel + 1) % pk.cards.length; sfx.blip(); }
+      if (jpAny(c.atk)) confirmPick(pk);
+    }
+  });
+  if (blessing.pickers.every(pk => pk.done)) {
+    roundNum++;
+    startRound();
+  }
+}
+function confirmPick(pk) {
+  const perk = pk.cards[pk.sel];
+  perk.apply(pk.p);
+  pk.p.perks.push(perk);
+  pk.done = true;
+  sfx.perk();
+}
+function drawBlessing() {
+  drawBG();
+  cx.fillStyle = 'rgba(4,4,15,0.82)'; cx.fillRect(0, 0, W, H);
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.font = 'bold 30px sans-serif'; cx.fillStyle = '#f0e6c8';
+  cx.fillText('✦ 별의 축복 ✦', W / 2, 62);
+  cx.font = '13px sans-serif'; cx.fillStyle = '#8a7ab0';
+  cx.fillText('패배한 자는 강해진다 — 이동 키로 선택, 공격 키로 확정', W / 2, 94);
+
+  const rows = blessing.pickers.length;
+  blessing.pickers.forEach((pk, ri) => {
+    const cy = 150 + ri * (rows > 1 ? 260 : 300) + (rows === 1 ? 80 : 0);
+    const c = pk.p.cfg;
+    cx.font = 'bold 16px sans-serif'; cx.fillStyle = c.color; cx.textAlign = 'left';
+    cx.fillText(`${pk.p.ch.emoji} ${c.label}${pk.p.ai ? '·AI' : ''}`, 120, cy - 8);
+    cx.textAlign = 'center';
+    const cardW = 240, cardH = 170, gap = 36;
+    const sx = (W - pk.cards.length * cardW - (pk.cards.length - 1) * gap) / 2;
+    pk.cards.forEach((card, ci) => {
+      const x = sx + ci * (cardW + gap), selected = pk.sel === ci;
+      const bump = selected && !pk.done ? Math.sin(frame * 0.12) * 3 : 0;
+      cx.fillStyle = selected ? 'rgba(35,28,65,0.95)' : 'rgba(16,14,32,0.9)';
+      cx.beginPath(); cx.roundRect(x, cy - bump, cardW, cardH, 14); cx.fill();
+      cx.strokeStyle = pk.done && selected ? '#f0e6c8' : selected ? c.color : 'rgba(255,255,255,0.12)';
+      cx.lineWidth = selected ? 3 : 1;
+      cx.beginPath(); cx.roundRect(x, cy - bump, cardW, cardH, 14); cx.stroke();
+      cx.font = '40px serif';
+      cx.fillText(card.icon, x + cardW / 2, cy + 46 - bump);
+      cx.font = 'bold 17px sans-serif'; cx.fillStyle = '#f0e6c8';
+      cx.fillText(card.name, x + cardW / 2, cy + 96 - bump);
+      cx.font = '12px sans-serif'; cx.fillStyle = '#9a8ab8';
+      cx.fillText(card.desc, x + cardW / 2, cy + 122 - bump);
+      if (pk.done && selected) {
+        cx.font = 'bold 13px sans-serif'; cx.fillStyle = '#a0e8a0';
+        cx.fillText('✓ 선택 완료', x + cardW / 2, cy + 148 - bump);
+      }
+    });
+  });
+}
+
+// ───────── 승리 화면 ─────────
+function drawMatchEnd() {
+  drawBG(); drawStage();
+  players.forEach(drawPlayer);
+  drawParticles();
+  cx.fillStyle = 'rgba(4,4,15,0.8)'; cx.fillRect(0, 0, W, H);
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  const w = matchWinner;
+  cx.font = '110px serif';
+  cx.fillText(w.ch.emoji, W / 2, 210);
+  cx.font = 'bold 46px sans-serif';
+  cx.fillStyle = w.cfg.color;
+  cx.fillText(`${w.cfg.label} ${w.ch.name} 승천!`, W / 2, 320);
+  cx.font = '16px sans-serif'; cx.fillStyle = '#9a8ab8';
+  const sorted = [...players].sort((a, b) => b.wins - a.wins || b.kos - a.kos);
+  sorted.forEach((p, i) => {
+    cx.fillText(`${i + 1}위  ${p.ch.emoji} ${p.cfg.label}${p.ai ? '·AI' : ''}  —  라운드 ${p.wins}승 · ${p.kos} KO · 축복 ${p.perks.length}개`, W / 2, 400 + i * 32);
+  });
+  cx.font = 'bold 19px sans-serif';
+  cx.fillStyle = Math.floor(frame / 25) % 2 ? '#f0e6c8' : '#a78bfa';
+  cx.fillText('Enter — 다시 하기', W / 2, 580);
+  if (jp('Enter')) { sfx.blip(); state = 'menu'; }
+}
+
+// ───────── 메인 루프 ─────────
+function loop() {
+  frame++;
+
+  if (state === 'menu') { updateMenu(); drawMenu(); }
+  else if (state === 'countdown') {
+    countdownT--;
+    if (countdownT === 120 || countdownT === 60) sfx.blip();
+    if (countdownT === 165) sfx.blip();
+    if (countdownT <= 0) { state = 'fight'; goT = 32; sfx.go(); }
+    drawWorldFrame();
+    const num = countdownT > 120 ? 3 : countdownT > 60 ? 2 : 1;
+    const sub = countdownT % 60;
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.font = `bold ${90 + sub * 0.6}px sans-serif`;
+    cx.globalAlpha = Math.min(1, sub / 18);
+    cx.fillStyle = '#f0e6c8';
+    cx.fillText(num, W / 2, H / 2 - 40);
+    cx.globalAlpha = 1;
+    cx.font = 'bold 22px sans-serif'; cx.fillStyle = '#8a7ab0';
+    cx.fillText(`ROUND ${roundNum}`, W / 2, H / 2 + 46);
+  }
+  else if (state === 'fight' || state === 'roundend') {
+    let runPhysics = true;
+    if (slowmo > 0) { slowmo--; if (frame % 3 !== 0) runPhysics = false; }
+    if (runPhysics) updateWorld();
+    drawWorldFrame();
+    if (goT > 0) {
+      goT--;
+      cx.textAlign = 'center'; cx.font = 'bold 80px sans-serif';
+      cx.globalAlpha = Math.min(1, goT / 10);
+      cx.fillStyle = '#a78bfa';
+      cx.fillText('GO!', W / 2, H / 2 - 40);
+      cx.globalAlpha = 1;
+    }
+    drawBannerText();
+    if (state === 'roundend') {
+      bannerT--;
+      if (bannerT <= 0) {
+        if (matchWinner) state = 'matchend';
+        else setupBlessing();
+      }
+    }
+    if (jp('Escape')) state = 'menu';
+  }
+  else if (state === 'blessing') { updateBlessing(); drawBlessing(); if (jp('Escape')) state = 'menu'; }
+  else if (state === 'matchend') { drawMatchEnd(); }
+
+  prevKeys = Object.assign({}, keys);
+  requestAnimationFrame(loop);
+}
+function drawWorldFrame() {
+  cx.save();
+  if (shakeT > 0) {
+    shakeT--;
+    const k = shakeT / shakeDur;
+    cx.translate((Math.random() - 0.5) * shakeMag * k * 2, (Math.random() - 0.5) * shakeMag * k * 2);
+    if (shakeT <= 0) shakeMag = 0;
+  }
+  drawBG(); drawStage();
+  players.forEach(drawPlayer);
+  drawParticles();
+  cx.restore();
+  drawHUD();
+}
+loop();
 </script>
 </body>
 </html>
