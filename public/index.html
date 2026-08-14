@@ -1904,7 +1904,7 @@ function respawn() {
   hp = 10; airLv = 10; hunger = 10; dead = false; fallPeak = pos.y;
   $('death').style.display = 'none';
   updateSurvivalHUD();
-  canvas.requestPointerLock();
+  lockPointer();
 }
 let _lastHudStr = '', _lastAirStr = null;
 function updateSurvivalHUD() {
@@ -2078,7 +2078,7 @@ function closeChest() {
   if (cursorStack) { const c = cursorStack; cursorStack = null; addItem(c.id, c.n); }
   chestOpen = false; openChest = null; pendingChest = null;
   $('chestov').style.display = 'none';
-  canvas.requestPointerLock();
+  lockPointer();
 }
 function pushChestState() {
   if (!openChest) return;
@@ -3635,21 +3635,36 @@ let playing = false, locked = false, invOpen = false, chatOpen = false, showDebu
 let holdL = false, holdR = false, holdTimerL = 0, holdTimerR = 0;
 
 const canvas = renderer.domElement;
+function lockPointer() {
+  try {
+    const pr = canvas.requestPointerLock({ unadjustedMovement: true });
+    if (pr && pr.catch) pr.catch(() => canvas.requestPointerLock());
+  } catch (e) { lockPointer(); }
+}
 canvas.addEventListener('click', () => {
   initAudio();
-  if (playing && !locked && !invOpen && !chatOpen && !chestOpen) canvas.requestPointerLock();
+  if (playing && !locked && !invOpen && !chatOpen && !chestOpen) lockPointer();
 });
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
   if (!locked) { holdL = holdR = false; stopMining(); }
   if (!locked && playing && !invOpen && !chatOpen && !chestOpen && !dead) showPause(true);
 });
+let mouseDX = 0, mouseDY = 0;
 document.addEventListener('mousemove', e => {
   if (!locked) return;
-  camera.rotation.y -= e.movementX * 0.0022;
-  camera.rotation.x -= e.movementY * 0.0022;
-  camera.rotation.x = Math.max(-1.55, Math.min(1.55, camera.rotation.x));
+  // 가끔 발생하는 비정상 스파이크 제거
+  if (Math.abs(e.movementX) > 350 || Math.abs(e.movementY) > 350) return;
+  mouseDX += e.movementX;
+  mouseDY += e.movementY;
 });
+function applyMouseLook() {
+  if (!mouseDX && !mouseDY) return;
+  camera.rotation.y -= mouseDX * 0.0022;
+  camera.rotation.x -= mouseDY * 0.0022;
+  camera.rotation.x = Math.max(-1.55, Math.min(1.55, camera.rotation.x));
+  mouseDX = 0; mouseDY = 0;
+}
 document.addEventListener('mousedown', e => {
   if (!locked || dead) return;
   if (e.button === 0) {
@@ -3739,7 +3754,7 @@ function closeInv() {
   if (cursorStack) { const c = cursorStack; cursorStack = null; addItem(c.id, c.n); }
   invOpen = false;
   $('inv').style.display = 'none';
-  canvas.requestPointerLock();
+  lockPointer();
 }
 $('inv').addEventListener('mousemove', e => {
   const g = $('cursorItem');
@@ -3767,7 +3782,7 @@ function closeChat(send) {
   inp.style.display = 'none';
   inp.blur();
   chatOpen = false;
-  canvas.requestPointerLock();
+  lockPointer();
 }
 $('chatin').addEventListener('keydown', e => {
   e.stopPropagation();
@@ -3779,7 +3794,7 @@ $('chatin').addEventListener('keydown', e => {
 function showPause(on) {
   $('pause').style.display = on ? 'flex' : 'none';
 }
-$('btn-resume').onclick = () => { showPause(false); canvas.requestPointerLock(); };
+$('btn-resume').onclick = () => { showPause(false); lockPointer(); };
 $('btn-invite').onclick = () => {
   const url = location.origin + '/?room=' + encodeURIComponent(net.room);
   navigator.clipboard.writeText(url).then(() => {
@@ -3807,7 +3822,7 @@ $('mode-s').onclick = () => { chosenMode = 's'; $('mode-s').classList.add('sel')
 $('mode-c').onclick = () => { chosenMode = 'c'; $('mode-c').classList.add('sel'); $('mode-s').classList.remove('sel'); };
 $('btn-respawn').onclick = respawn;
 $('btn-wake').onclick = () => wakeUp(true);
-$('btn-ending-close').onclick = () => { $('ending').style.display = 'none'; canvas.requestPointerLock(); };
+$('btn-ending-close').onclick = () => { $('ending').style.display = 'none'; lockPointer(); };
 
 $('btn-start').onclick = startGame;
 $('in-name').addEventListener('keydown', e => { if (e.code === 'Enter') startGame(); });
@@ -3934,6 +3949,7 @@ function frame(now) {
   fpsN++; fpsT += dt;
   if (fpsT >= 0.5) { fps = Math.round(fpsN / fpsT); fpsN = 0; fpsT = 0; }
 
+  if (locked) applyMouseLook();
   if (locked && !invOpen && !chatOpen && !chestOpen && !dead) {
     phyAcc = Math.min(0.34, phyAcc + dt);
     while (phyAcc >= 1 / 60) {
