@@ -814,20 +814,165 @@ const chunks = new Map();
 const cKey = (cx, cz) => cx + ',' + cz;
 const bIdx = (lx, y, lz) => (lx * 16 + lz) * 64 + y;
 
+// 전체 월드 평탄 배열 (빠른 접근용) — 청크 배열과 항상 동기화
+const vox = new Uint8Array(WSIZE * WSIZE * WH);
+const vIdx = (x, y, z) => (x << 14) | (z << 6) | y; // x<256, z<256, y<64
+
 function getB(x, y, z) {
-  if (y < 0 || y >= WH || x < 0 || z < 0 || x >= WSIZE || z >= WSIZE) return 0;
-  const c = chunks.get(cKey(x >> 4, z >> 4));
-  return c ? c[bIdx(x & 15, y, z & 15)] : 0;
+  if ((x | y | z) < 0 || x >= WSIZE || z >= WSIZE || y >= WH) return 0;
+  return vox[(x << 14) | (z << 6) | y];
 }
-const glowSet = new Map(); // "x,y,z" -> 밝기 (횃불/발광석 위치 추적)
+const glowSet = new Map(); // "x,y,z" -> 블록 id (횃불/발광석 위치)
 function setB(x, y, z, b) {
-  if (y < 0 || y >= WH || x < 0 || z < 0 || x >= WSIZE || z >= WSIZE) return;
+  if ((x | y | z) < 0 || x >= WSIZE || z >= WSIZE || y >= WH) return;
   const c = chunks.get(cKey(x >> 4, z >> 4));
   if (!c) return;
   c[bIdx(x & 15, y, z & 15)] = b;
+  vox[vIdx(x, y, z)] = b;
   const k = x + ',' + y + ',' + z;
-  if (b === 23 || b === 13) glowSet.set(k, b === 13 ? 1.5 : 1.1); // 횃불 23, 발광석 13
+  if (b === 23 || b === 13) glowSet.set(k, b); // 횃불 23, 발광석 13
   else glowSet.delete(k);
+}
+function syncVoxFromChunks() {
+  for (const [key, data] of chunks) {
+    const [cx, cz] = key.split(',').map(Number);
+    const x0 = cx * 16, z0 = cz * 16;
+    for (let lx = 0; lx < 16; lx++) for (let lz = 0; lz < 16; lz++) {
+      const src = (lx * 16 + lz) * 64;
+      const dst = ((x0 + lx) << 14) | ((z0 + lz) << 6);
+      for (let y = 0; y < WH; y++) vox[dst | y] = data[src + y];
+    }
+  }
+}
+
+// ═════════════════ 조명 엔진 (마인크래프트식 블록 단위 빛 전파) ═════════════════
+const skyL = new Uint8Array(WSIZE * WSIZE * WH); // 하늘빛 0-15
+const blkL = new Uint8Array(WSIZE * WSIZE * WH); // 횃불빛 0-15
+const lightSky = (x, y, z) => {
+  if (y >= WH) return 15;
+  if ((x | y | z) < 0 || x >= WSIZE || z >= WSIZE) return 15;
+  return skyL[(x << 14) | (z << 6) | y];
+};
+const lightBlk = (x, y, z) => {
+  if ((x | y | z) < 0 || x >= WSIZE || z >= WSIZE || y >= WH) return 0;
+  return blkL[(x << 14) | (z << 6) | y];
+};
+const lightCost = b => b === B.water ? 3 : b === B.leaves ? 2 : 1;
+function glowLevel(b) { return b === B.glow ? 15 : b === B.torch ? 14 : 0; }
+
+// 한 열(column)의 하늘빛: 위에서 아래로, 막히면 끝
+function skyColumn(x, z) {
+  let cur = 15;
+  const base = (x << 14) | (z << 6);
+  for (let y = WH - 1; y >= 0; y--) {
+    const b = vox[base | y];
+    if (BLOCKS[b].occl) break;
+    skyL[base | y] = cur;
+    if (b === B.water) cur = Math.max(0, cur - 3);
+    else if (b === B.leaves) cur = Math.max(0, cur - 2);
+  }
+}
+// BFS 전파 (박스 제한 가능)
+function bfsLight(queue, arr, xa, za, xb, zb) {
+  let head = 0;
+  while (head < queue.length) {
+    const i = queue[head++];
+    const L = arr[i];
+    if (L <= 1) continue;
+    const x = i >> 14, z = (i >> 6) & 255, y = i & 63;
+    for (let d = 0; d < 6; d++) {
+      const nx2 = x + (d === 0 ? 1 : d === 1 ? -1 : 0);
+      const nz2 = z + (d === 2 ? 1 : d === 3 ? -1 : 0);
+      const ny2 = y + (d === 4 ? 1 : d === 5 ? -1 : 0);
+      if (nx2 < xa || nx2 > xb || nz2 < za || nz2 > zb || ny2 < 0 || ny2 >= WH) continue;
+      const ni = (nx2 << 14) | (nz2 << 6) | ny2;
+      const b = vox[ni];
+      if (BLOCKS[b].occl) continue;
+      const nl = L - lightCost(b);
+      if (nl > arr[ni]) { arr[ni] = nl; queue.push(ni); }
+    }
+  }
+}
+// 전체 월드 조명 계산 (로딩 시 1회)
+function computeFullLight() {
+  skyL.fill(0); blkL.fill(0);
+  for (let x = 0; x < WSIZE; x++) for (let z = 0; z < WSIZE; z++) skyColumn(x, z);
+  // 하늘빛이 동굴로 스며드는 프런티어 찾기
+  const q = [];
+  for (let x = 0; x < WSIZE; x++) for (let z = 0; z < WSIZE; z++) {
+    const base = (x << 14) | (z << 6);
+    for (let y = 0; y < WH; y++) {
+      const L = skyL[base | y];
+      if (L <= 1) continue;
+      const i = base | y;
+      if ((x > 0 && skyL[i - (1 << 14)] < L - 1 && !BLOCKS[vox[i - (1 << 14)]].occl) ||
+          (x < WSIZE - 1 && skyL[i + (1 << 14)] < L - 1 && !BLOCKS[vox[i + (1 << 14)]].occl) ||
+          (z > 0 && skyL[i - (1 << 6)] < L - 1 && !BLOCKS[vox[i - (1 << 6)]].occl) ||
+          (z < WSIZE - 1 && skyL[i + (1 << 6)] < L - 1 && !BLOCKS[vox[i + (1 << 6)]].occl) ||
+          (y > 0 && skyL[i - 1] < L - 1 && !BLOCKS[vox[i - 1]].occl)) q.push(i);
+    }
+  }
+  bfsLight(q, skyL, 0, 0, WSIZE - 1, WSIZE - 1);
+  // 횃불·발광석
+  const q2 = [];
+  for (const [k, b] of glowSet) {
+    const [x, y, z] = k.split(',').map(Number);
+    const i = vIdx(x, y, z);
+    blkL[i] = glowLevel(b);
+    q2.push(i);
+  }
+  bfsLight(q2, blkL, 0, 0, WSIZE - 1, WSIZE - 1);
+}
+// 블록 편집 주변만 다시 계산 → 조명이 바뀐 청크 집합 반환
+function relightAround(bx, bz) {
+  const R = 24;
+  const xa = Math.max(0, bx - R), xb = Math.min(WSIZE - 1, bx + R);
+  const za = Math.max(0, bz - R), zb = Math.min(WSIZE - 1, bz + R);
+  // 스냅샷 + 초기화
+  const oldS = [], oldB = [];
+  for (let x = xa; x <= xb; x++) for (let z = za; z <= zb; z++) {
+    const base = (x << 14) | (z << 6);
+    for (let y = 0; y < WH; y++) { oldS.push(skyL[base | y]); oldB.push(blkL[base | y]); skyL[base | y] = 0; blkL[base | y] = 0; }
+  }
+  for (let x = xa; x <= xb; x++) for (let z = za; z <= zb; z++) skyColumn(x, z);
+  const q = [], q2 = [];
+  for (let x = xa; x <= xb; x++) for (let z = za; z <= zb; z++) {
+    const base = (x << 14) | (z << 6);
+    for (let y = 0; y < WH; y++) if (skyL[base | y] > 1) q.push(base | y);
+  }
+  // 경계 밖 한 겹의 현재 빛을 시드로 (밖에서 들어오는 빛)
+  const ring = [];
+  for (let x = xa - 1; x <= xb + 1; x++) { ring.push([x, za - 1]); ring.push([x, zb + 1]); }
+  for (let z = za; z <= zb; z++) { ring.push([xa - 1, z]); ring.push([xb + 1, z]); }
+  for (const [x, z] of ring) {
+    if (x < 0 || z < 0 || x >= WSIZE || z >= WSIZE) continue;
+    const base = (x << 14) | (z << 6);
+    for (let y = 0; y < WH; y++) {
+      if (skyL[base | y] > 1) q.push(base | y);
+      if (blkL[base | y] > 1) q2.push(base | y);
+    }
+  }
+  for (const [k, b] of glowSet) {
+    const [x, y, z] = k.split(',').map(Number);
+    if (x < xa || x > xb || z < za || z > zb) continue;
+    const i = vIdx(x, y, z);
+    blkL[i] = glowLevel(b);
+    q2.push(i);
+  }
+  bfsLight(q, skyL, xa - 1, za - 1, xb + 1, zb + 1);
+  bfsLight(q2, blkL, xa - 1, za - 1, xb + 1, zb + 1);
+  // 바뀐 청크 수집
+  const changed = new Set();
+  let p = 0;
+  for (let x = xa; x <= xb; x++) for (let z = za; z <= zb; z++) {
+    const base = (x << 14) | (z << 6);
+    let diff = false;
+    for (let y = 0; y < WH; y++, p++) {
+      if (oldS[p] !== skyL[base | y] || oldB[p] !== blkL[base | y]) diff = true;
+    }
+    if (diff) changed.add(cKey(x >> 4, z >> 4));
+  }
+  return changed;
 }
 
 function genChunk(cx, cz) {
@@ -905,38 +1050,24 @@ scene.add(sunLight); scene.add(sunLight.target);
 const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambLight);
 
-// 횃불/발광석용 동적 광원 풀 (가까운 8개만 실제 광원 사용)
-const lightPool = [];
-for (let i = 0; i < 14; i++) {
-  const pl = new THREE.PointLight(0xffb35e, 0, 12);
-  scene.add(pl);
-  lightPool.push(pl);
+// 월드 머티리얼: 구운 조명(하늘빛/횃불빛)을 셰이더에서 실시간 낮밤과 합성
+const SUN_U = { value: 1 };
+function lightify(mat) {
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uSun = SUN_U;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aSky;\nattribute float aBlock;\nvarying float vSky;\nvarying float vBlk;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSky = aSky;\nvBlk = aBlock;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uSun;\nvarying float vSky;\nvarying float vBlk;')
+      .replace('#include <color_fragment>',
+        '#include <color_fragment>\n{\n  vec3 lf = max(vec3(vSky * uSun), vec3(vBlk, vBlk * 0.82, vBlk * 0.55));\n  lf = max(lf, vec3(0.045));\n  diffuseColor.rgb *= lf;\n}');
+  };
+  return mat;
 }
-let lightUpdT = 0;
-function updateGlowLights(dt) {
-  lightUpdT -= dt;
-  if (lightUpdT > 0) return;
-  lightUpdT = 0.25;
-  const cands = [];
-  for (const [k, inten] of glowSet) {
-    const [x, y, z] = k.split(',').map(Number);
-    const d2 = (x - pos.x) ** 2 + (y - pos.y) ** 2 + (z - pos.z) ** 2;
-    if (d2 < 900) cands.push([d2, x, y, z, inten]);
-  }
-  cands.sort((a, b) => a[0] - b[0]);
-  for (let i = 0; i < lightPool.length; i++) {
-    const pl = lightPool[i];
-    if (i < cands.length) {
-      pl.position.set(cands[i][1] + 0.5, cands[i][2] + 0.6, cands[i][3] + 0.5);
-      pl.intensity = cands[i][4] * 22; // three r155+ physical falloff 보정
-      pl.distance = 11;
-    } else pl.intensity = 0;
-  }
-}
-
-const matOpaque = new THREE.MeshLambertMaterial({ map: atlasTex, vertexColors: true });
-const matCutout = new THREE.MeshLambertMaterial({ map: atlasTex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide });
-const matWater  = new THREE.MeshLambertMaterial({ map: atlasTex, vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false });
+const matOpaque = lightify(new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true }));
+const matCutout = lightify(new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide }));
+const matWater  = lightify(new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, transparent: true, opacity: 0.78, depthWrite: false }));
 
 // ═════════════════ 하늘 ═════════════════
 function glowSprite(inner, outer, size = 128) {
@@ -999,6 +1130,7 @@ const FACES = [
 ];
 const CORNERS = [[0, 0], [1, 0], [1, 1], [0, 1]];
 const AO_LUT = [0.5, 0.7, 0.85, 1.0];
+const FACE_SHADE = [0.8, 0.8, 1.0, 0.55, 0.88, 0.88]; // +X -X +Y -Y +Z -Z
 const occlAt = (x, y, z) => BLOCKS[getB(x, y, z)].occl;
 
 function uvOf(tileI, fu, fv) {
@@ -1015,19 +1147,28 @@ function faceUV(fi, vert, x, y, z) {
 function pushFace(a, fi, x, y, z, tileI, withAO, yTopOff) {
   const f = FACES[fi];
   const vertBase = a.pos.length / 3;
-  const aos = [1, 1, 1, 1];
-  let aoVals = [3, 3, 3, 3];
-  if (withAO) {
-    const nx = x + f.n[0], ny = y + f.n[1], nz = z + f.n[2];
-    for (let i = 0; i < 4; i++) {
-      const su = CORNERS[i][0] ? 1 : -1, sv = CORNERS[i][1] ? 1 : -1;
-      const s1 = occlAt(nx + f.u[0]*su, ny + f.u[1]*su, nz + f.u[2]*su) ? 1 : 0;
-      const s2 = occlAt(nx + f.v[0]*sv, ny + f.v[1]*sv, nz + f.v[2]*sv) ? 1 : 0;
-      const co = occlAt(nx + f.u[0]*su + f.v[0]*sv, ny + f.u[1]*su + f.v[1]*sv, nz + f.u[2]*su + f.v[2]*sv) ? 1 : 0;
-      const ao = (s1 && s2) ? 0 : 3 - (s1 + s2 + co);
+  const nx = x + f.n[0], ny = y + f.n[1], nz = z + f.n[2];
+  const shade = FACE_SHADE[fi];
+  const aos = [1, 1, 1, 1], aoVals = [3, 3, 3, 3];
+  const skyV = [0, 0, 0, 0], blkV = [0, 0, 0, 0];
+  for (let i = 0; i < 4; i++) {
+    const su = CORNERS[i][0] ? 1 : -1, sv = CORNERS[i][1] ? 1 : -1;
+    const c1x = nx + f.u[0]*su, c1y = ny + f.u[1]*su, c1z = nz + f.u[2]*su;
+    const c2x = nx + f.v[0]*sv, c2y = ny + f.v[1]*sv, c2z = nz + f.v[2]*sv;
+    const c3x = c1x + f.v[0]*sv, c3y = c1y + f.v[1]*sv, c3z = c1z + f.v[2]*sv;
+    const o1 = occlAt(c1x, c1y, c1z), o2 = occlAt(c2x, c2y, c2z), o3 = occlAt(c3x, c3y, c3z);
+    if (withAO) {
+      const ao = (o1 && o2) ? 0 : 3 - ((o1 ? 1 : 0) + (o2 ? 1 : 0) + (o3 ? 1 : 0));
       aoVals[i] = ao;
       aos[i] = AO_LUT[ao];
     }
+    // 꼭짓점 주변 4칸 평균 → 부드러운 조명 그라데이션
+    let sSum = lightSky(nx, ny, nz), bSum = lightBlk(nx, ny, nz), cnt = 1;
+    if (!o1) { sSum += lightSky(c1x, c1y, c1z); bSum += lightBlk(c1x, c1y, c1z); cnt++; }
+    if (!o2) { sSum += lightSky(c2x, c2y, c2z); bSum += lightBlk(c2x, c2y, c2z); cnt++; }
+    if (!o3) { sSum += lightSky(c3x, c3y, c3z); bSum += lightBlk(c3x, c3y, c3z); cnt++; }
+    skyV[i] = sSum / cnt / 15;
+    blkV[i] = bSum / cnt / 15;
   }
   for (let i = 0; i < 4; i++) {
     const uc = CORNERS[i][0], vc = CORNERS[i][1];
@@ -1040,7 +1181,10 @@ function pushFace(a, fi, x, y, z, tileI, withAO, yTopOff) {
     const [fu, fv] = faceUV(fi, [vx, vy, vz], x, y, z);
     const uv = uvOf(tileI, Math.min(1, Math.max(0, fu)), Math.min(1, Math.max(0, fv)));
     a.uv.push(uv[0], uv[1]);
-    a.col.push(aos[i], aos[i], aos[i]);
+    const br = aos[i] * shade;
+    a.col.push(br, br, br);
+    a.sky.push(skyV[i]);
+    a.blk.push(blkV[i]);
   }
   if (aoVals[0] + aoVals[2] >= aoVals[1] + aoVals[3]) {
     a.idx.push(vertBase, vertBase+1, vertBase+2, vertBase, vertBase+2, vertBase+3);
@@ -1053,6 +1197,7 @@ function pushCross(a, x, y, z, tileI) {
     [[0.15,0,0.15],[0.85,0,0.85],[0.85,1,0.85],[0.15,1,0.15]],
     [[0.85,0,0.15],[0.15,0,0.85],[0.15,1,0.85],[0.85,1,0.15]],
   ];
+  const sk = lightSky(x, y, z) / 15, bk = lightBlk(x, y, z) / 15;
   for (const q of quads) {
     const vb = a.pos.length / 3;
     for (let i = 0; i < 4; i++) {
@@ -1060,14 +1205,16 @@ function pushCross(a, x, y, z, tileI) {
       a.nrm.push(0, 1, 0);
       const uv = uvOf(tileI, i === 1 || i === 2 ? 1 : 0, i >= 2 ? 1 : 0);
       a.uv.push(uv[0], uv[1]);
-      a.col.push(1, 1, 1);
+      a.col.push(0.95, 0.95, 0.95);
+      a.sky.push(sk);
+      a.blk.push(bk);
     }
     a.idx.push(vb, vb+1, vb+2, vb, vb+2, vb+3);
   }
 }
 
 const chunkMeshes = new Map();
-function newArrs() { return { pos: [], nrm: [], uv: [], col: [], idx: [] }; }
+function newArrs() { return { pos: [], nrm: [], uv: [], col: [], sky: [], blk: [], idx: [] }; }
 function toGeom(a) {
   if (!a.idx.length) return null;
   const g = new THREE.BufferGeometry();
@@ -1075,6 +1222,8 @@ function toGeom(a) {
   g.setAttribute('normal', new THREE.Float32BufferAttribute(a.nrm, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(a.uv, 2));
   g.setAttribute('color', new THREE.Float32BufferAttribute(a.col, 3));
+  g.setAttribute('aSky', new THREE.Float32BufferAttribute(a.sky, 1));
+  g.setAttribute('aBlock', new THREE.Float32BufferAttribute(a.blk, 1));
   g.setIndex(a.idx);
   return g;
 }
@@ -1119,9 +1268,9 @@ function buildChunkMeshes(cx, cz) {
   const gWat = toGeom(wat); if (gWat) { rec.wat = new THREE.Mesh(gWat, matWater); scene.add(rec.wat); }
   chunkMeshes.set(key, rec);
 }
-function remeshAround(x, z) {
+function collectRemesh(x, z, set) {
   const cx = x >> 4, cz = z >> 4, lx = x & 15, lz = z & 15;
-  const set = new Set([cKey(cx, cz)]);
+  set.add(cKey(cx, cz));
   if (lx === 0) set.add(cKey(cx - 1, cz));
   if (lx === 15) set.add(cKey(cx + 1, cz));
   if (lz === 0) set.add(cKey(cx, cz - 1));
@@ -1130,7 +1279,22 @@ function remeshAround(x, z) {
   if (lx === 0 && lz === 15) set.add(cKey(cx - 1, cz + 1));
   if (lx === 15 && lz === 0) set.add(cKey(cx + 1, cz - 1));
   if (lx === 15 && lz === 15) set.add(cKey(cx + 1, cz + 1));
-  for (const k of set) {
+}
+// 편집은 프레임 단위로 모아 조명 재계산 + 리메시를 한 번에 (폭발 등 대량 편집 대응)
+const editQueue = [];
+function flushEdits() {
+  if (!editQueue.length) return;
+  const toMesh = new Set();
+  const lightCenters = new Map();
+  for (const [x, z] of editQueue) {
+    collectRemesh(x, z, toMesh);
+    lightCenters.set(cKey(x >> 4, z >> 4), [(x >> 4) * 16 + 8, (z >> 4) * 16 + 8]);
+  }
+  editQueue.length = 0;
+  for (const [, [bx, bz]] of lightCenters) {
+    for (const k of relightAround(bx, bz)) toMesh.add(k);
+  }
+  for (const k of toMesh) {
     if (!chunks.has(k)) continue;
     const [a, b] = k.split(',').map(Number);
     buildChunkMeshes(a, b);
@@ -1499,7 +1663,7 @@ function applyEdit(x, y, z, b, fromNet) {
   const cur = getB(x, y, z);
   if (cur === b) return;
   setB(x, y, z, b);
-  remeshAround(x, z);
+  editQueue.push([x, z]);
   if (!fromNet && net.ready) net.send({ t: 'b', x, y, z, b });
 }
 function doBreak() { // 크리에이티브: 즉시 파괴
@@ -2569,12 +2733,10 @@ function onDisconnect() {
       hostId = m.host || null;
       $('status').textContent = '';
       // 서버 상태로 동기화
-      const touched = new Set();
       for (const [k, v] of Object.entries(m.edits)) {
         const [x, y, z] = k.split(',').map(Number);
-        if (getB(x, y, z) !== v) { setB(x, y, z, v); touched.add(cKey(x >> 4, z >> 4)); }
+        if (getB(x, y, z) !== v) { setB(x, y, z, v); editQueue.push([x, z]); }
       }
-      for (const k of touched) { const [a, b] = k.split(',').map(Number); buildChunkMeshes(a, b); }
       for (const id of [...remotes.keys()]) removeRemote(id);
       for (const p of m.players) addRemote(p.id, p.name, p.p);
       sysMsg('서버에 다시 연결됐습니다');
@@ -2619,6 +2781,7 @@ function updateSky() {
   skyColor.setRGB(c.r, c.g, c.b);
   scene.background = skyColor;
   scene.fog.color.copy(skyColor);
+  SUN_U.value = Math.max(0.16, Math.min(1, el * 2.6 + 0.12)); // 밤에도 달빛 최소치
 
   const sunDir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0.35).normalize();
   sunSprite.position.copy(camera.position).addScaledVector(sunDir, 430);
@@ -3130,10 +3293,17 @@ async function startGame() {
   }
   // 3) 저장된 편집 적용
   txt.textContent = '건축물 불러오는 중…';
+  syncVoxFromChunks();
   for (const [k, v] of Object.entries(edits)) {
     const [x, y, z] = k.split(',').map(Number);
     setB(x, y, z, v);
   }
+  await raf();
+  // 3.5) 빛 계산
+  txt.textContent = '빛을 계산하는 중…';
+  bar.style.width = '48%';
+  await raf();
+  computeFullLight();
   await raf();
   // 4) 메싱
   done = 0;
@@ -3200,6 +3370,7 @@ function frame(now) {
   } else {
     prevPos.copy(pos);
   }
+  flushEdits();
 
   // 서바이벌: 산소·배고픔·체력 재생
   if (survival && !dead) {
@@ -3243,7 +3414,6 @@ function frame(now) {
   updateMobs(dt);
   updateDrops(dt);
   updateFx(dt);
-  updateGlowLights(dt);
   updateSky();
   netTick();
   checkAllAsleep();
