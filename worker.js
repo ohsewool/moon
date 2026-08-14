@@ -120,6 +120,12 @@ export class WorldDO {
     } else if (m.t === 'mobhit') {
       // 플레이어의 몹 공격 — 호스트가 받아서 처리
       this.broadcast({ t: 'mobhit', i: m.i | 0, d: Math.min(10, Math.max(0, +m.d || 0)), kx: +m.kx || 0, kz: +m.kz || 0 }, ws);
+    } else if (m.t === 'summon') {
+      // 달의 제단 보스 소환 — 호스트가 처리
+      this.broadcast({ t: 'summon', x: +m.x || 0, y: +m.y || 0, z: +m.z || 0, by: a.name }, ws);
+    } else if (m.t === 'slam') {
+      // 보스 내려찍기 충격파
+      this.broadcast({ t: 'slam', x: +m.x || 0, y: +m.y || 0, z: +m.z || 0 }, ws);
     } else if (m.t === 'sleep') {
       // 수면 상태 알림 (호스트가 전원 취침 판정)
       this.broadcast({ t: 'sleep', id: a.id, on: !!m.on }, ws);

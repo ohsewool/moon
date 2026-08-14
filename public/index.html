@@ -215,6 +215,25 @@
   }
   #hand canvas { image-rendering: pixelated; }
   #hand.swing { animation: handswing 0.18s ease-out; }
+
+  /* ── 보스 체력바 ── */
+  #bossbar {
+    position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
+    width: 420px; display: none; text-align: center;
+  }
+  #bossbar .bname {
+    font-size: 14px; font-weight: bold; color: #e8e0f8; letter-spacing: 3px;
+    text-shadow: 0 1px 4px #000, 0 0 12px rgba(142,244,239,0.5); margin-bottom: 5px;
+  }
+  #bossbar .btrack {
+    height: 12px; background: rgba(0,0,0,0.6); border: 1px solid rgba(142,244,239,0.4);
+    border-radius: 6px; overflow: hidden;
+  }
+  #bossbar .bfill {
+    height: 100%; width: 100%; border-radius: 5px;
+    background: linear-gradient(90deg, #8ef4ef, #c0b8f0);
+    transition: width 0.25s;
+  }
   @keyframes handswing {
     0% { transform: rotate(8deg) translateY(0); }
     40% { transform: rotate(-14deg) translate(-22px, 14px); }
@@ -345,6 +364,30 @@
   <div id="chatlog"></div>
   <input id="chatin" maxlength="200" placeholder="메시지 입력 후 Enter" />
   <div id="plist"></div>
+  <div id="bossbar">
+    <div class="bname">🌕 달의 수호자</div>
+    <div class="btrack"><div class="bfill"></div></div>
+  </div>
+</div>
+
+<!-- 엔딩 -->
+<div class="overlay" id="ending" style="display:none; background: rgba(2,2,12,0.94); z-index: 30;">
+  <div class="panel" style="max-width:560px">
+    <div style="font-size:5rem; margin-bottom:10px">🌕</div>
+    <h1 style="color:#8ef4ef">달의 수호자 격파!</h1>
+    <div class="sub" style="margin-top:10px">달빛 세계에 평화가 찾아왔다</div>
+    <div style="font-size:0.9rem; color:#c0b8d8; line-height:2; margin:22px 0">
+      나무 한 그루에서 시작해<br>
+      돌을 캐고, 철을 녹이고, 다이아를 찾고,<br>
+      달의 제단을 쌓아 수호자를 쓰러뜨렸다.<br><br>
+      <b style="color:#f0e6c8">🏆 달의 심장</b>을 손에 넣었다 —<br>
+      가장 빛나는 곳에 장식해 보자.
+    </div>
+    <div style="font-size:0.7rem; color:#6a5a90; letter-spacing:1px; margin-bottom:18px">
+      MOONCRAFT — ohsewool × Claude 바이브코딩 작품
+    </div>
+    <button class="bigbtn" id="btn-ending-close">계속 탐험하기</button>
+  </div>
 </div>
 
 <script type="module">
@@ -359,7 +402,7 @@ const $ = id => document.getElementById(id);
 // tiles: [윗면, 옆면, 아랫면] 아틀라스 타일 번호
 const B = { air:0, grass:1, dirt:2, stone:3, cobble:4, sand:5, log:6, leaves:7, planks:8,
             glass:9, brick:10, snow:11, water:12, glow:13, flower_r:14, flower_y:15, tgrass:16, bedrock:17,
-            coalore:18, ironore:19, diaore:20, furnace:21, bed:22, torch:23, chest:24 };
+            coalore:18, ironore:19, diaore:20, furnace:21, bed:22, torch:23, chest:24, heart:25, altar:26 };
 // hard: 채굴 시간(초). pick:true = 곡괭이 필요(맨손이면 5.5배 느리고 드롭 없음)
 // dropTo: 부쉈을 때 나오는 아이템 (없으면 자기 자신, null이면 아무것도 안 나옴)
 const BLOCKS = [
@@ -388,6 +431,8 @@ const BLOCKS = [
   { name:'침대',        kind:'solid', solid:true, occl:true, tiles:[23,25,9],  inv:true, hard:0.8 },
   { name:'횃불',        kind:'cross', solid:false, occl:false, tiles:[24,24,24], inv:true, hard:0.05 },
   { name:'상자',        kind:'solid', solid:true, occl:true, tiles:[26,27,26], inv:true, hard:1.2 },
+  { name:'달의 심장',   kind:'solid', solid:true, occl:true, tiles:[29,29,29], inv:true, hard:1.5, pick:true },
+  { name:'달의 제단',   kind:'solid', solid:true, occl:true, tiles:[28,28,28], inv:true, hard:2.2, pick:true },
 ];
 
 // ── 도구·재료·음식 아이템 (id 100+) ──
@@ -513,6 +558,7 @@ const RECIPES = [
   { out: [B.chest, 1], ins: [[8, 8]] },                        // 상자 (판자8)
   { out: [118, 1], ins: [[107, 8]] },                          // 철 갑옷
   { out: [119, 1], ins: [[108, 8]] },                          // 다이아 갑옷
+  { out: [B.altar, 1], ins: [[108, 4], [13, 4], [3, 8]] },     // 달의 제단 (다이아4+발광석4+돌8)
 ];
 function nearFurnace() {
   const px = Math.floor(pos.x), py = Math.floor(pos.y + 1), pz = Math.floor(pos.z);
@@ -729,6 +775,20 @@ tile(27, c => {
   c.fillStyle = '#c8c8c8'; c.fillRect(6, 4, 4, 5);
   c.fillStyle = '#8a8a8a'; c.fillRect(7, 6, 2, 2);
 });
+// 28 달의 제단
+tile(28, c => {
+  fillNoise(c, '#3a3a55', ['#2e2e48','#464668','#28283e'], 100);
+  c.strokeStyle = '#8ef4ef'; c.strokeRect(1.5, 1.5, 13, 13);
+  c.fillStyle = '#e8e0f8'; c.fillRect(6, 6, 4, 4);
+  c.fillStyle = '#8ef4ef'; c.fillRect(7, 3, 2, 2); c.fillRect(7, 11, 2, 2); c.fillRect(3, 7, 2, 2); c.fillRect(11, 7, 2, 2);
+});
+// 29 달의 심장
+tile(29, c => {
+  fillNoise(c, '#e8e6f4', ['#dcd8ec','#f4f2fc','#d0ccdf'], 80);
+  c.fillStyle = '#8ef4ef'; c.fillRect(5, 5, 6, 6);
+  c.fillStyle = '#fff'; c.fillRect(6, 6, 3, 3);
+  c.fillStyle = '#c0b8f0'; c.fillRect(3, 3, 2, 2); c.fillRect(11, 11, 2, 2); c.fillRect(11, 3, 2, 2); c.fillRect(3, 11, 2, 2);
+});
 
 const atlasTex = new THREE.CanvasTexture(atlasCanvas);
 atlasTex.magFilter = THREE.NearestFilter;
@@ -830,7 +890,7 @@ function setB(x, y, z, b) {
   c[bIdx(x & 15, y, z & 15)] = b;
   vox[vIdx(x, y, z)] = b;
   const k = x + ',' + y + ',' + z;
-  if (b === 23 || b === 13) glowSet.set(k, b); // 횃불 23, 발광석 13
+  if (b === 23 || b === 13 || b === 25 || b === 26) glowSet.set(k, b); // 횃불·발광석·달의 심장·제단
   else glowSet.delete(k);
 }
 function syncVoxFromChunks() {
@@ -858,7 +918,7 @@ const lightBlk = (x, y, z) => {
   return blkL[(x << 14) | (z << 6) | y];
 };
 const lightCost = b => b === B.water ? 3 : b === B.leaves ? 2 : 1;
-function glowLevel(b) { return b === B.glow ? 15 : b === B.torch ? 14 : 0; }
+function glowLevel(b) { return b === B.glow || b === B.heart ? 15 : b === B.torch ? 14 : b === B.altar ? 12 : 0; }
 
 // 한 열(column)의 하늘빛: 위에서 아래로, 막히면 끝
 function skyColumn(x, z) {
@@ -1341,6 +1401,9 @@ const snd = {
   moo: () => tone(140 + Math.random() * 30, 0.6, 'sawtooth', 0.06, -50),
   boom: () => { noiseS(0.6, 0.4); tone(70, 0.8, 'sawtooth', 0.25, -40); },
   hiss: () => noiseS(0.3, 0.1),
+  roar: () => { tone(60, 1.2, 'sawtooth', 0.28, 45); noiseS(0.5, 0.2); },
+  slam: () => { noiseS(0.4, 0.35); tone(50, 0.5, 'sine', 0.3, -20); },
+  fanfare: () => { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.35, 'triangle', 0.14), i * 160)); },
 };
 
 // ═════════════════ 플레이어 물리 ═════════════════
@@ -1869,6 +1932,7 @@ function doPlace() {
   {
     const bHit = raycast();
     if (bHit && bHit.b === B.chest) { openChestAt(bHit.x, bHit.y, bHit.z); return; }
+    if (bHit && bHit.b === B.altar) { trySummonBoss(bHit.x, bHit.y, bHit.z); return; }
     if (survival && bHit && bHit.b === B.bed) { bedInteract(bHit); return; }
   }
   // 음식이면 먹기
@@ -2180,13 +2244,51 @@ function makeZombieMesh() {
   g.rotation.order = 'YXZ';
   return { g, legL, legR };
 }
-// 몹 타입: 0 좀비, 1 돼지, 2 소, 3 크리퍼
+// 몹 타입: 0 좀비, 1 돼지, 2 소, 3 크리퍼, 4 달의 수호자(보스)
 const MOB_DEF = [
-  { hp: 8, color: '#5da54a', drop: null, hostile: true },
-  { hp: 6, color: '#f0a0b0', drop: 113, hostile: false }, // 돼지 → 생돼지고기
-  { hp: 8, color: '#7a5238', drop: 115, hostile: false }, // 소 → 생소고기
-  { hp: 6, color: '#4ea83c', drop: 105, hostile: false }, // 크리퍼 → 석탄 (화약 대용)
+  { hp: 8,   color: '#5da54a', drop: null, hostile: true,  touchDmg: 1 },
+  { hp: 6,   color: '#f0a0b0', drop: 113,  hostile: false }, // 돼지 → 생돼지고기
+  { hp: 8,   color: '#7a5238', drop: 115,  hostile: false }, // 소 → 생소고기
+  { hp: 6,   color: '#4ea83c', drop: 105,  hostile: false }, // 크리퍼 → 석탄
+  { hp: 150, color: '#d8d8e8', drop: null, hostile: true,  touchDmg: 3 }, // 보스
 ];
+const MOB_DIMS = [[0.3, 1.75], [0.3, 1.0], [0.3, 1.1], [0.3, 1.75], [0.72, 3.3]];
+
+function makeBossMesh() {
+  const stone = new THREE.MeshLambertMaterial({ color: 0xd8d8e8 });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x8a8ab0 });
+  // 빛나는 눈 얼굴
+  const fc = document.createElement('canvas'); fc.width = fc.height = 32;
+  const fg = fc.getContext('2d');
+  fg.fillStyle = '#d8d8e8'; fg.fillRect(0, 0, 32, 32);
+  fg.fillStyle = '#8ef4ef'; fg.fillRect(5, 11, 8, 6); fg.fillRect(19, 11, 8, 6);
+  fg.fillStyle = '#3a3a55'; fg.fillRect(11, 23, 10, 4);
+  const ftex = new THREE.CanvasTexture(fc); ftex.magFilter = THREE.NearestFilter;
+  const face = new THREE.MeshLambertMaterial({ map: ftex, emissive: 0x226666 });
+
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.6, 0.8), stone);
+  body.position.y = 1.9;
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.9, 0.95), [stone, stone, stone, stone, face, stone]);
+  head.position.y = 3.15;
+  const armL = new THREE.Group(), armR = new THREE.Group();
+  for (const [grp, sx] of [[armL, -0.95], [armR, 0.95]]) {
+    grp.position.set(sx, 2.55, 0);
+    const mm = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.7, 0.55), dark);
+    mm.position.y = -0.7;
+    grp.add(mm);
+  }
+  const legL = new THREE.Group(), legR = new THREE.Group();
+  for (const [grp, sx] of [[legL, -0.38], [legR, 0.38]]) {
+    grp.position.set(sx, 1.1, 0);
+    const mm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 0.5), dark);
+    mm.position.y = -0.55;
+    grp.add(mm);
+  }
+  g.add(body, head, armL, armR, legL, legR);
+  g.rotation.order = 'YXZ';
+  return { g, legL, legR, armL, armR };
+}
 const creeperTex = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 32;
   const g = c.getContext('2d');
@@ -2264,12 +2366,13 @@ function makeAnimalMesh(type) {
 function ensureMob(i, type = 0) {
   let m = mobs.get(i);
   if (m) return m;
-  const mesh = type === 0 ? makeZombieMesh() : type === 3 ? makeCreeperMesh() : makeAnimalMesh(type);
+  const mesh = type === 0 ? makeZombieMesh() : type === 3 ? makeCreeperMesh() : type === 4 ? makeBossMesh() : makeAnimalMesh(type);
   scene.add(mesh.g);
   m = { i, type, hp: MOB_DEF[type].hp, mesh,
         sim: { x: 0, y: -50, z: 0, vx: 0, vy: 0, vz: 0, onG: false },
         tp: new THREE.Vector3(0, -50, 0), tyaw: 0, swing: 0, groanCd: 0,
-        wanderT: 0, wdir: 0, wspd: 0, fleeT: 0, fuse: 0, fusing: false, steerT: 0, steerDir: 1 };
+        wanderT: 0, wdir: 0, wspd: 0, fleeT: 0, fuse: 0, fusing: false, steerT: 0, steerDir: 1,
+        slamCd: 3, slamJump: false, minionT: 8, maxHp: MOB_DEF[type].hp };
   mobs.set(i, m);
   return m;
 }
@@ -2281,9 +2384,80 @@ function killMob(i, withFx) {
     // 동물은 고기 드롭 (각자 자기 화면에서 주울 수 있음)
     const drop = MOB_DEF[m.type].drop;
     if (drop && survival) spawnDrop(m.tp.x, m.tp.y + 0.6, m.tp.z, drop, 1 + (Math.random() < 0.4 ? 1 : 0));
+    if (m.type === 4) bossDefeated(m.tp.x, m.tp.y, m.tp.z); // 보스 처치!
   }
   scene.remove(m.mesh.g);
   mobs.delete(i);
+}
+// ── 보스 처치 → 전리품 + 엔딩 ──
+function bossDefeated(x, y, z) {
+  for (const col of ['#8ef4ef', '#ffffff', '#e8e0f8', '#c0b8f0']) spawnBreakFx(x, y + 2, z, col);
+  snd.fanfare();
+  if (survival) {
+    spawnDrop(x, y + 1, z, B.heart, 1);
+    spawnDrop(x + 0.5, y + 1, z + 0.5, 108, 3); // 다이아 3개 보너스
+  }
+  sysMsg('🌕 달의 수호자가 쓰러졌다!');
+  setTimeout(showEnding, 1600);
+}
+let endingShown = false;
+function showEnding() {
+  $('ending').style.display = 'flex';
+  document.exitPointerLock();
+  endingShown = true;
+  // 축포
+  let count = 0;
+  const fw = setInterval(() => {
+    if (++count > 14 || $('ending').style.display === 'none') { clearInterval(fw); return; }
+    const a = Math.random() * 6.28, r = 4 + Math.random() * 9;
+    spawnBreakFx(pos.x + Math.cos(a) * r, pos.y + 3 + Math.random() * 5, pos.z + Math.sin(a) * r,
+                 ['#8ef4ef', '#f0e6c8', '#f472b6', '#a78bfa'][count % 4]);
+    tone(500 + Math.random() * 500, 0.2, 'sine', 0.08);
+  }, 350);
+}
+// ── 보스 내려찍기 충격파 (모든 클라이언트 연출 + 자기 데미지) ──
+function slamAt(x, y, z) {
+  snd.slam();
+  for (let k = 0; k < 22; k++) {
+    const a = (k / 22) * 6.28;
+    particlesRing(x + Math.cos(a) * 2.2, y + 0.3, z + Math.sin(a) * 2.2);
+  }
+  const d = Math.hypot(pos.x - x, pos.y - y, pos.z - z);
+  if (d < 6 && survival && !dead && !flying) {
+    damage(Math.max(1, Math.round((1 - d / 6) * 5)), '달의 수호자');
+    const kl = Math.max(0.5, d);
+    vel.x += (pos.x - x) / kl * 8;
+    vel.z += (pos.z - z) / kl * 8;
+    vel.y = 7;
+  }
+}
+function particlesRing(x, y, z) {
+  particlesRing._c = ((particlesRing._c || 0) + 1) % 2;
+  spawnBreakFx(x, y, z, particlesRing._c ? '#d8d8e8' : '#8a8ab0');
+}
+// ── 제단 소환 ──
+function trySummonBoss(x, y, z) {
+  if (!survival) { sysMsg('보스는 서바이벌 월드에서만 소환할 수 있어요'); return; }
+  sysMsg('🌑 제단이 울리기 시작한다…');
+  snd.roar();
+  if (net.ready) net.send({ t: 'summon', x, y, z });
+  if (isHost()) hostSummonBoss(x, y, z);
+}
+function hostSummonBoss(x, y, z) {
+  if ([...mobs.values()].some(m => m.type === 4)) { sysMsg('달의 수호자가 이미 깨어 있다!'); return; }
+  for (let tries = 0; tries < 12; tries++) {
+    const ang = Math.random() * 6.28, dist = 6 + Math.random() * 4;
+    const sx = Math.floor(x + Math.cos(ang) * dist), sz = Math.floor(z + Math.sin(ang) * dist);
+    if (sx < 2 || sz < 2 || sx >= WSIZE - 2 || sz >= WSIZE - 2) continue;
+    const gy = groundYAt(sx, sz);
+    if (gy < 0) continue;
+    const m = ensureMob(mobSeq++, 4);
+    m.hp = 120 + 60 * (remotes.size + 1); // 인원수 비례 체력
+    m.maxHp = m.hp;
+    m.sim.x = sx + 0.5; m.sim.y = gy + 0.5; m.sim.z = sz + 0.5;
+    m.tp.set(m.sim.x, m.sim.y, m.sim.z);
+    return;
+  }
 }
 function groundYAt(x, z) {
   for (let y = WH - 1; y > 0; y--) {
@@ -2337,10 +2511,10 @@ function spawnCaveMob(p) { // 지하 공기 주머니를 찾아 좀비/크리퍼
     }
   }
 }
-function mobMoveAxis(s, axis, d) {
+function mobMoveAxis(s, axis, d, hw, hh) {
   if (d === 0) return;
   s[axis] += d;
-  const hw = 0.3, hh = 1.75;
+  hw = hw || 0.3; hh = hh || 1.75;
   const min = [s.x - hw, s.y, s.z - hw], max = [s.x + hw, s.y + hh, s.z + hw];
   let hit = false;
   for (let bx = Math.floor(min[0]); bx <= Math.ceil(max[0]) - 1; bx++)
@@ -2389,16 +2563,17 @@ function hostSimMobs(dt) {
     if (m.hp <= 0) { killMob(i, true); continue; }
 
     let mvx = 0, mvz = 0, spd = 0, faceDx = 0, faceDz = 1;
-    if (m.type === 0 || m.type === 3) {
-      // 좀비·크리퍼: 가장 가까운 플레이어 추적
+    if (m.type === 0 || m.type === 3 || m.type === 4) {
+      // 좀비·크리퍼·보스: 가장 가까운 플레이어 추적
       let t = null, best = 1e9;
       for (const p of players) {
         const d2 = (p.x - s.x) ** 2 + (p.z - s.z) ** 2;
         if (d2 < best) { best = d2; t = p; }
       }
-      if (!t || best > 3600) { killMob(i, false); continue; }
+      if (!t || (best > 3600 && m.type !== 4)) { killMob(i, false); continue; }
+      if (!t) continue;
       const dx = t.x - s.x, dz = t.z - s.z, dl = Math.hypot(dx, dz) || 1;
-      mvx = dx / dl; mvz = dz / dl; spd = m.type === 3 ? 2.5 : 2.2;
+      mvx = dx / dl; mvz = dz / dl; spd = m.type === 3 ? 2.5 : m.type === 4 ? 2.9 : 2.2;
       faceDx = dx; faceDz = dz;
       // 벽에 막히면 잠시 옆으로 돌아감
       if (m.steerT > 0) {
@@ -2421,6 +2596,27 @@ function hostSimMobs(dt) {
           continue;
         }
       }
+      // 보스 패턴
+      if (m.type === 4) {
+        m.slamCd -= dt;
+        m.minionT -= dt;
+        if (m.slamCd <= 0 && best < 56 && s.onG) { // 내려찍기 도약
+          s.vy = 11.5;
+          m.slamJump = true;
+          m.slamCd = 7 + Math.random() * 2;
+        }
+        if (m.minionT <= 0) { // 부하 좀비 소환
+          m.minionT = 10;
+          const zn = [...mobs.values()].filter(mm => mm.type === 0).length;
+          if (zn < 4) {
+            const zm = ensureMob(mobSeq++, 0);
+            zm.sim.x = s.x + (Math.random() - 0.5) * 6;
+            zm.sim.y = s.y + 1;
+            zm.sim.z = s.z + (Math.random() - 0.5) * 6;
+            zm.tp.set(zm.sim.x, zm.sim.y, zm.sim.z);
+          }
+        }
+      }
     } else {
       // 동물: 어슬렁거리기 + 맞으면 도망
       m.wanderT -= dt;
@@ -2440,13 +2636,19 @@ function hostSimMobs(dt) {
     s.vz += (mvz * spd - s.vz) * Math.min(1, dt * 6);
     s.vy -= 26 * dt;
     s.vy = Math.max(-30, s.vy);
+    const [mhw, mhh] = MOB_DIMS[m.type];
     const wasG = s.onG;
     s.onG = false;
-    mobMoveAxis(s, 'y', s.vy * dt);
-    const hitX = mobMoveAxis(s, 'x', s.vx * dt);
-    const hitZ = mobMoveAxis(s, 'z', s.vz * dt);
+    mobMoveAxis(s, 'y', s.vy * dt, mhw, mhh);
+    const hitX = mobMoveAxis(s, 'x', s.vx * dt, mhw, mhh);
+    const hitZ = mobMoveAxis(s, 'z', s.vz * dt, mhw, mhh);
+    if (m.type === 4 && m.slamJump && !wasG && s.onG) { // 보스 착지 충격파
+      m.slamJump = false;
+      slamAt(s.x, s.y, s.z);
+      if (net.ready) net.send({ t: 'slam', x: +s.x.toFixed(1), y: +s.y.toFixed(1), z: +s.z.toFixed(1) });
+    }
     if ((hitX || hitZ) && (wasG || s.onG)) {
-      s.vy = 8.2; // 막히면 점프
+      s.vy = m.type === 4 ? 9.5 : 8.2; // 막히면 점프
       if ((m.type === 0 || m.type === 3) && m.steerT <= 0) { // 그래도 안 되면 우회
         m.steerT = 0.9;
         m.steerDir = Math.random() < 0.5 ? 1 : -1;
@@ -2513,8 +2715,8 @@ function tryAttackMob() {
   for (const m of mobs.values()) {
     // 화면에 보이는 위치 기준으로 판정 (움직이는 몹도 보이는 대로 맞음)
     const p = m.mesh.g.position;
-    const hw = (m.type === 1 || m.type === 2 ? 0.6 : 0.45) + 0.18;
-    const hh = (m.type === 1 || m.type === 2 ? 1.2 : m.type === 3 ? 2.1 : 1.9) + 0.15;
+    const hw = (m.type === 4 ? 0.9 : m.type === 1 || m.type === 2 ? 0.6 : 0.45) + 0.18;
+    const hh = (m.type === 4 ? 3.4 : m.type === 1 || m.type === 2 ? 1.2 : m.type === 3 ? 2.1 : 1.9) + 0.15;
     box.min.set(p.x - hw, p.y - 0.1, p.z - hw);
     box.max.set(p.x + hw, p.y + hh, p.z + hw);
     if (rc.intersectBox(box, hitP)) {
@@ -2537,8 +2739,16 @@ function tryAttackMob() {
   return true;
 }
 function updateMobs(dt) {
-  if (!survival) return;
+  if (!survival) { $('bossbar').style.display = 'none'; return; }
   if (isHost()) hostSimMobs(dt);
+  // 보스 체력바
+  let boss = null;
+  for (const m of mobs.values()) if (m.type === 4) { boss = m; break; }
+  if (boss) {
+    boss.maxHp = Math.max(boss.maxHp || boss.hp, boss.hp);
+    $('bossbar').style.display = 'block';
+    $('bossbar').querySelector('.bfill').style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%';
+  } else $('bossbar').style.display = 'none';
   const k = 1 - Math.exp(-12 * dt);
   for (const m of mobs.values()) {
     const g = m.mesh.g;
@@ -2570,11 +2780,12 @@ function updateMobs(dt) {
       if (m.type === 0) snd.zomb(); else if (m.type === 1) snd.oink(); else snd.moo();
       m.groanCd = 3 + Math.random() * 4;
     }
-    if (!dead && MOB_DEF[m.type].hostile && dist2 < 1.6) {
+    const touchR2 = m.type === 4 ? 4.6 : 1.6;
+    if (!dead && MOB_DEF[m.type].hostile && dist2 < touchR2) {
       const now = performance.now() / 1000;
       if (now - lastMobHurt > 1.0) {
         lastMobHurt = now;
-        damage(1, '좀비');
+        damage(MOB_DEF[m.type].touchDmg || 1, m.type === 4 ? '달의 수호자' : '좀비');
         const kl = Math.hypot(dx, dz) || 1;
         vel.x = -(dx / kl) * 6; // 좀비 반대쪽으로 밀려남
         vel.z = -(dz / kl) * 6;
@@ -2700,6 +2911,12 @@ function handleMsg(m) {
     sysMsg('☀️ 아침이 밝았습니다!');
   } else if (m.t === 'boom') {
     boomAt(m.x, m.y, m.z);
+  } else if (m.t === 'summon') {
+    sysMsg(`🌑 ${m.by} 님이 제단을 발동했다…`);
+    snd.roar();
+    if (isHost()) hostSummonBoss(m.x, m.y, m.z);
+  } else if (m.t === 'slam') {
+    slamAt(m.x, m.y, m.z);
   } else if (m.t === 'chest') {
     if (pendingChest && pendingChest.x === m.x && pendingChest.y === m.y && pendingChest.z === m.z) {
       pendingChest = null;
@@ -3234,6 +3451,7 @@ $('mode-s').onclick = () => { chosenMode = 's'; $('mode-s').classList.add('sel')
 $('mode-c').onclick = () => { chosenMode = 'c'; $('mode-c').classList.add('sel'); $('mode-s').classList.remove('sel'); };
 $('btn-respawn').onclick = respawn;
 $('btn-wake').onclick = () => wakeUp(true);
+$('btn-ending-close').onclick = () => { $('ending').style.display = 'none'; canvas.requestPointerLock(); };
 
 $('btn-start').onclick = startGame;
 $('in-name').addEventListener('keydown', e => { if (e.code === 'Enter') startGame(); });
