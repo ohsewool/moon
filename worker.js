@@ -1,6 +1,8 @@
 // MoonCraft multiplayer server — Cloudflare Worker + Durable Object
-// 방(room)마다 하나의 WorldDO 인스턴스가 만들어져 월드 시드/블록 편집을 저장하고
-// 접속자 간 위치·블록·채팅 메시지를 중계한다.
+// 방(room)마다 하나의 WorldDO 인스턴스가 만들어져 월드 시드/모드/블록 편집을 저장하고
+// 접속자 간 위치·블록·채팅·몹 동기화 메시지를 중계한다.
+// 몹(좀비)은 "호스트"(가장 먼저 접속한 플레이어)의 브라우저가 시뮬레이션하고
+// 서버는 그 결과를 다른 플레이어에게 중계만 한다.
 
 export default {
   async fetch(request, env) {
@@ -14,13 +16,12 @@ export default {
   },
 };
 
-const MAX_MSG = 4096;
+const MAX_MSG = 8192;
 const WORLD_H = 64;
 
 export class WorldDO {
   constructor(state) {
     this.state = state;
-    // ping/pong은 DO를 깨우지 않고 자동 응답 (연결 유지용)
     this.state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
 
@@ -34,6 +35,15 @@ export class WorldDO {
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  currentHost() {
+    let best = null, bestT = Infinity;
+    for (const s of this.state.getWebSockets()) {
+      const a = safeAttach(s);
+      if (a && a.id && a.joinT < bestT) { bestT = a.joinT; best = a.id; }
+    }
+    return best;
+  }
+
   async webSocketMessage(ws, raw) {
     if (typeof raw !== 'string' || raw.length > MAX_MSG) return;
     let m;
@@ -42,22 +52,24 @@ export class WorldDO {
 
     if (m.t === 'join') {
       let seed = await this.state.storage.get('seed');
+      let mode = await this.state.storage.get('mode');
       if (seed == null) {
         seed = (Math.random() * 0x7fffffff) | 0;
+        mode = m.mode === 's' ? 's' : 'c';
         await this.state.storage.put('seed', seed);
+        await this.state.storage.put('mode', mode);
         await this.state.storage.put('t0', Date.now());
       }
+      if (mode == null) mode = 'c'; // 업데이트 전에 만들어진 월드는 크리에이티브
       const t0 = (await this.state.storage.get('t0')) || Date.now();
       const id = crypto.randomUUID().slice(0, 8);
       const name = String(m.name || '플레이어').replace(/[\r\n]/g, ' ').slice(0, 16).trim() || '플레이어';
-      ws.serializeAttachment({ id, name, lastChat: 0 });
+      ws.serializeAttachment({ id, name, joinT: Date.now(), lastChat: 0 });
 
-      // 저장된 모든 블록 편집 수집 (청크 단위 키)
       const stored = await this.state.storage.list({ prefix: 'e:' });
       const edits = {};
       for (const v of stored.values()) Object.assign(edits, v);
 
-      // 현재 접속 중인 다른 플레이어
       const players = [];
       for (const s of this.state.getWebSockets()) {
         if (s === ws) continue;
@@ -65,7 +77,10 @@ export class WorldDO {
         if (a && a.id) players.push({ id: a.id, name: a.name, p: a.p || null });
       }
 
-      ws.send(JSON.stringify({ t: 'init', id, name, seed, t0, now: Date.now(), edits, players }));
+      ws.send(JSON.stringify({
+        t: 'init', id, name, seed, mode, t0, now: Date.now(),
+        host: this.currentHost(), edits, players,
+      }));
       this.broadcast({ t: 'pjoin', id, name }, ws);
       return;
     }
@@ -96,12 +111,33 @@ export class WorldDO {
       const text = String(m.text || '').replace(/[\r\n]/g, ' ').slice(0, 200).trim();
       if (!text) return;
       this.broadcast({ t: 'c', id: a.id, name: a.name, text }, null);
+    } else if (m.t === 'mobs') {
+      // 호스트가 보내는 몹 상태 — 그대로 중계
+      if (!Array.isArray(m.l) || m.l.length > 16) return;
+      this.broadcast({ t: 'mobs', l: m.l }, ws);
+    } else if (m.t === 'mobhit') {
+      // 플레이어의 몹 공격 — 호스트가 받아서 처리
+      this.broadcast({ t: 'mobhit', i: m.i | 0, d: Math.min(10, Math.max(0, +m.d || 0)), kx: +m.kx || 0, kz: +m.kz || 0 }, ws);
     }
   }
 
   webSocketClose(ws) {
     const a = safeAttach(ws);
-    if (a && a.id) this.broadcast({ t: 'pleave', id: a.id }, ws);
+    if (a && a.id) {
+      this.broadcast({ t: 'pleave', id: a.id }, ws);
+      const h = this.currentHostExcept(ws);
+      if (h) this.broadcast({ t: 'host', id: h }, ws);
+    }
+  }
+
+  currentHostExcept(except) {
+    let best = null, bestT = Infinity;
+    for (const s of this.state.getWebSockets()) {
+      if (s === except) continue;
+      const a = safeAttach(s);
+      if (a && a.id && a.joinT < bestT) { bestT = a.joinT; best = a.id; }
+    }
+    return best;
   }
 
   webSocketError(ws) {
