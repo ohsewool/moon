@@ -2266,7 +2266,7 @@ function hostSimMobs(dt) {
         m.wdir = Math.random() * 6.28;
         m.wspd = Math.random() < 0.45 ? 0 : 1;
       }
-      const sp = m.fleeT > 0 ? 3.2 : m.wspd;
+      const sp = m.fleeT > 0 ? 2.9 : m.wspd;
       mvx = Math.sin(m.wdir); mvz = Math.cos(m.wdir); spd = sp;
       faceDx = mvx; faceDz = mvz;
       // 낭떠러지/물가에서 무한 이동 방지: 플레이어와 너무 멀면 정지
@@ -2344,13 +2344,15 @@ function tryAttackMob() {
   if (!survival || !mobs.size) return false;
   const rc = new THREE.Ray(camera.position.clone(), new THREE.Vector3());
   camera.getWorldDirection(rc.direction);
-  let bestM = null, bestD = 3.6;
+  let bestM = null, bestD = 4.2;
   const box = new THREE.Box3(), hitP = new THREE.Vector3();
   for (const m of mobs.values()) {
-    const hw = m.type === 1 || m.type === 2 ? 0.6 : 0.45;
-    const hh = m.type === 1 || m.type === 2 ? 1.2 : m.type === 3 ? 2.1 : 1.9;
-    box.min.set(m.tp.x - hw, m.tp.y, m.tp.z - hw);
-    box.max.set(m.tp.x + hw, m.tp.y + hh, m.tp.z + hw);
+    // 화면에 보이는 위치 기준으로 판정 (움직이는 몹도 보이는 대로 맞음)
+    const p = m.mesh.g.position;
+    const hw = (m.type === 1 || m.type === 2 ? 0.6 : 0.45) + 0.18;
+    const hh = (m.type === 1 || m.type === 2 ? 1.2 : m.type === 3 ? 2.1 : 1.9) + 0.15;
+    box.min.set(p.x - hw, p.y - 0.1, p.z - hw);
+    box.max.set(p.x + hw, p.y + hh, p.z + hw);
     if (rc.intersectBox(box, hitP)) {
       const d = hitP.distanceTo(camera.position);
       if (d < bestD) { bestD = d; bestM = m; }
@@ -2359,7 +2361,7 @@ function tryAttackMob() {
   if (!bestM) return false;
   const nowS = performance.now() / 1000;
   if (nowS < atkCdUntil) return true; // 쿨다운 중엔 헛스윙
-  atkCdUntil = nowS + 0.5;
+  atkCdUntil = nowS + 0.4;
   snd.swing();
   swingHand();
   const dir = rc.direction;
