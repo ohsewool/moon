@@ -185,6 +185,32 @@
     color: #0f0f1a; font-weight: bold; font-size: 0.8rem; cursor: pointer;
   }
   .recipe button:disabled { background: #3a3860; color: #666; cursor: default; }
+
+  /* ── 인벤토리 상세 ── */
+  .invslot.isel { border-color: #f0e6c8; }
+  #cursorItem {
+    position: fixed; z-index: 40; pointer-events: none; display: none;
+    width: 44px; height: 44px; transform: translate(-22px, -22px);
+  }
+  #cursorItem canvas { image-rendering: pixelated; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.7)); }
+  #cursorItem .cnt { position: absolute; bottom: 0; right: 2px; font-size: 12px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; }
+  #itemname {
+    position: absolute; left: 50%; bottom: 126px; transform: translateX(-50%);
+    font-size: 14px; color: #f0e6c8; text-shadow: 0 1px 4px #000;
+    opacity: 0; transition: opacity 0.5s; pointer-events: none; letter-spacing: 1px;
+  }
+  #hand {
+    position: absolute; right: 6%; bottom: -18px; width: 150px; height: 150px;
+    pointer-events: none; transform: rotate(8deg); transform-origin: bottom right;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));
+  }
+  #hand canvas { image-rendering: pixelated; }
+  #hand.swing { animation: handswing 0.18s ease-out; }
+  @keyframes handswing {
+    0% { transform: rotate(8deg) translateY(0); }
+    40% { transform: rotate(-14deg) translate(-22px, 14px); }
+    100% { transform: rotate(8deg) translateY(0); }
+  }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js" } }
@@ -252,11 +278,12 @@
 
 <!-- 인벤토리 -->
 <div class="overlay" id="inv">
-  <div class="panel">
-    <h1 style="font-size:1.3rem">블록 선택</h1>
-    <div class="sub">클릭하면 현재 슬롯에 담깁니다 (E 로 닫기)</div>
+  <div class="panel" style="max-width:640px">
+    <h1 style="font-size:1.3rem">인벤토리</h1>
+    <div class="sub">클릭 = 집기/놓기 · Shift+클릭 = 가방↔핫바 이동 (E 로 닫기)</div>
     <div id="invgrid"></div>
   </div>
+  <div id="cursorItem"><canvas width="44" height="44"></canvas><span class="cnt"></span></div>
 </div>
 
 <!-- 수면 화면 -->
@@ -286,6 +313,8 @@
   <div id="mineprog"><div class="fill"></div></div>
   <div id="airbar"></div>
   <div id="hearts"></div>
+  <div id="itemname"></div>
+  <div id="hand"><canvas id="handcv" width="150" height="150"></canvas></div>
   <div id="hotbar"></div>
   <div id="info"></div>
   <div id="status"></div>
@@ -1111,6 +1140,7 @@ const pos = new THREE.Vector3(WSIZE / 2, 40, WSIZE / 2);
 const vel = new THREE.Vector3();
 let onGround = false, flying = false, sprinting = false;
 let lastSpaceT = 0, jumpBuf = 0, coyote = 0, bobPhase = 0, stepTimer = 0;
+let sprintLatch = false, lastWTap = 0;
 const keysDown = {};
 
 const solidAt = (x, y, z) => BLOCKS[getB(Math.floor(x), Math.floor(y), Math.floor(z))].solid;
@@ -1148,7 +1178,7 @@ function stepPhysics(dt) {
     wx = fx * fwd + rx * str; wz = fz * fwd + rz * str;
     const l = Math.hypot(wx, wz); wx /= l; wz /= l;
   }
-  sprinting = keysDown.ShiftLeft && fwd > 0 && !flying;
+  sprinting = (keysDown.ShiftLeft || sprintLatch) && fwd > 0 && !flying;
   const inWater = waterAt(pos.x, pos.y + 0.4, pos.z);
   const wasInWater = stepPhysics._w || false;
   if (inWater && !wasInWater && vel.y < -4) snd.splash();
@@ -1242,39 +1272,76 @@ function raycast(maxD = 5.5) {
   return null;
 }
 
-const hotbar = [B.grass, B.dirt, B.stone, B.planks, B.log, B.leaves, B.glass, B.brick, B.glow];
+// ── 인벤토리: 슬롯 0-8 핫바, 9-35 가방. 각 슬롯 {id, n} 또는 null ──
+const INV_SIZE = 36;
+const invSlots = Array(INV_SIZE).fill(null);
+const CREATIVE_BAR = [B.grass, B.dirt, B.stone, B.planks, B.log, B.leaves, B.glass, B.brick, B.glow];
 let selSlot = 0;
+let cursorStack = null; // 인벤토리 화면에서 마우스로 집은 스택
+
+function stackMax(id) { return id >= 100 && ITEMS[id] && !ITEMS[id].food ? 1 : 64; }
+function heldItem() { return invSlots[selSlot]; }
+function countOf(id) {
+  let n = 0;
+  for (const s of invSlots) if (s && s.id === id) n += s.n;
+  return n;
+}
+function addItem(id, n = 1) {
+  for (let i = 0; i < INV_SIZE && n > 0; i++) { // 기존 스택 채우기 (핫바 우선)
+    const s = invSlots[i];
+    if (s && s.id === id && s.n < stackMax(id)) { const a = Math.min(n, stackMax(id) - s.n); s.n += a; n -= a; }
+  }
+  for (let i = 0; i < INV_SIZE && n > 0; i++) { // 빈 칸 채우기
+    if (!invSlots[i]) { const a = Math.min(n, stackMax(id)); invSlots[i] = { id, n: a }; n -= a; }
+  }
+  if (n > 0) { spawnDrop(pos.x, pos.y + 0.8, pos.z, id, n); sysMsg('⚠ 인벤토리가 가득 찼어요'); }
+  drawHotbar(); drawHand();
+}
+function takeItem(id, n = 1) {
+  if (countOf(id) < n) return false;
+  for (let i = INV_SIZE - 1; i >= 0 && n > 0; i--) { // 가방부터 소모
+    const s = invSlots[i];
+    if (s && s.id === id) { const t = Math.min(n, s.n); s.n -= t; n -= t; if (s.n <= 0) invSlots[i] = null; }
+  }
+  drawHotbar(); drawHand();
+  return true;
+}
+function takeFromSel(n = 1) {
+  const s = invSlots[selSlot];
+  if (!s || s.n < n) return false;
+  s.n -= n;
+  if (s.n <= 0) invSlots[selSlot] = null;
+  drawHotbar(); drawHand();
+  return true;
+}
+function setSel(i) {
+  selSlot = i;
+  drawHotbar(); drawHand();
+  const s = invSlots[selSlot];
+  showItemName(s ? itemName(s.id) : '');
+}
+let itemNameTimer = null;
+function showItemName(name) {
+  const el = $('itemname');
+  el.textContent = name;
+  el.style.opacity = name ? 1 : 0;
+  clearTimeout(itemNameTimer);
+  itemNameTimer = setTimeout(() => el.style.opacity = 0, 1600);
+}
 
 // ── 서바이벌 상태 ──
 let survival = false, hostId = null;
 let hp = 10, airLv = 10, hunger = 10, dead = false;
 let lastDmgT = -99, regenAcc = 0, drownAcc = 0, fallPeak = 0, lastMobHurt = 0;
 let hungerAcc = 0, starveAcc = 0, eatCd = 0;
-const invCount = new Map(); // 아이템 id → 개수
-
-function countOf(id) { return invCount.get(id) || 0; }
-function addItem(id, n = 1) {
-  invCount.set(id, countOf(id) + n);
-  if (!hotbar.includes(id)) {
-    const e = hotbar.indexOf(null);
-    if (e >= 0) hotbar[e] = id;
-  }
-  drawHotbar();
-}
-function takeItem(id, n = 1) {
-  if (countOf(id) < n) return false;
-  invCount.set(id, countOf(id) - n);
-  drawHotbar();
-  return true;
-}
 function pickTier() {
-  const id = hotbar[selSlot];
-  if (id >= 100 && ITEMS[id] && ITEMS[id].pickTier && countOf(id) > 0) return ITEMS[id].pickTier;
+  const s = heldItem();
+  if (s && s.id >= 100 && ITEMS[s.id] && ITEMS[s.id].pickTier) return ITEMS[s.id].pickTier;
   return 0;
 }
 function swordDmg() {
-  const id = hotbar[selSlot];
-  if (id >= 100 && ITEMS[id] && ITEMS[id].dmg && countOf(id) > 0) return ITEMS[id].dmg;
+  const s = heldItem();
+  if (s && s.id >= 100 && ITEMS[s.id] && ITEMS[s.id].dmg) return ITEMS[s.id].dmg;
   return 1;
 }
 const TIER_SPEED = { 1: 1, 2: 0.55, 3: 0.38, 4: 0.28 };
@@ -1357,6 +1424,7 @@ function doBreak() { // 크리에이티브: 즉시 파괴
   spawnBreakFx(hit.x, hit.y, hit.z, BLOCKS[hit.b].color);
   applyEdit(hit.x, hit.y, hit.z, 0, false);
   snd.break();
+  swingHand();
 }
 
 // ── 서바이벌 채굴 ──
@@ -1369,10 +1437,14 @@ function tickMining(dt) {
   }
   mining.prog += dt;
   mineSndT -= dt;
-  if (mineSndT <= 0) { snd.step(); mineSndT = 0.28; }
+  if (mineSndT <= 0) { snd.step(); swingHand(); mineSndT = 0.28; }
   const el = $('mineprog');
   el.style.display = 'block';
   el.firstElementChild.style.width = Math.min(100, mining.prog / mining.total * 100) + '%';
+  // 균열 표시
+  crackMesh.visible = true;
+  crackMesh.position.set(mining.x + 0.5, mining.y + 0.5, mining.z + 0.5);
+  crackMesh.material.map = crackTexs[Math.min(3, Math.floor(mining.prog / mining.total * 4))];
   if (mining.prog >= mining.total) {
     const drop = dropOf(mining.b);
     spawnBreakFx(mining.x, mining.y, mining.z, BLOCKS[mining.b].color);
@@ -1381,9 +1453,10 @@ function tickMining(dt) {
     if (drop !== null) spawnDrop(mining.x + 0.5, mining.y + 0.4, mining.z + 0.5, drop, 1);
     mining = null;
     el.style.display = 'none';
+    crackMesh.visible = false;
   }
 }
-function stopMining() { mining = null; $('mineprog').style.display = 'none'; }
+function stopMining() { mining = null; $('mineprog').style.display = 'none'; crackMesh.visible = false; }
 
 // ── 침대 & 수면 ──
 let sleeping = false, spawnPt = null;
@@ -1427,14 +1500,16 @@ function doPlace() {
     if (bHit && bHit.b === B.bed) { bedInteract(bHit); return; }
   }
   // 음식이면 먹기
-  const held = hotbar[selSlot];
-  if (survival && held >= 100 && ITEMS[held] && ITEMS[held].food && countOf(held) > 0) {
+  const heldS = heldItem();
+  if (survival && heldS && heldS.id >= 100 && ITEMS[heldS.id] && ITEMS[heldS.id].food) {
     const nowS = performance.now() / 1000;
     if (nowS < eatCd || hunger >= 10) return;
     eatCd = nowS + 0.9;
-    takeItem(held, 1);
-    hunger = Math.min(10, hunger + ITEMS[held].food);
+    const food = ITEMS[heldS.id].food;
+    takeFromSel(1);
+    hunger = Math.min(10, hunger + food);
     snd.eat();
+    swingHand();
     updateSurvivalHUD();
     return;
   }
@@ -1444,28 +1519,34 @@ function doPlace() {
   if (px < 0 || pz < 0 || px >= WSIZE || pz >= WSIZE || py < 1 || py >= WH) return;
   const cur = getB(px, py, pz);
   if (cur !== 0 && BLOCKS[cur].kind !== 'water' && BLOCKS[cur].kind !== 'cross') return;
-  const b = hotbar[selSlot];
-  if (b == null || b >= 100) return; // 도구는 설치 불가
-  if (survival && countOf(b) < 1) return;
+  if (!heldS || heldS.id >= 100) return; // 도구는 설치 불가
+  const b = heldS.id;
   if (BLOCKS[b].solid) {
     const overlapX = px + 1 > pos.x - PL.hw && px < pos.x + PL.hw;
     const overlapY = py + 1 > pos.y && py < pos.y + PL.hh;
     const overlapZ = pz + 1 > pos.z - PL.hw && pz < pos.z + PL.hw;
     if (overlapX && overlapY && overlapZ) return;
   }
-  if (survival) takeItem(b, 1);
+  if (survival && !takeFromSel(1)) return;
   applyEdit(px, py, pz, b, false);
   snd.place();
+  swingHand();
 }
 function doPick() {
   const hit = raycast();
   if (!hit) return;
   if (!BLOCKS[hit.b].inv) return;
   if (survival) {
-    const slot = hotbar.indexOf(hit.b);
-    if (slot >= 0) { selSlot = slot; drawHotbar(); snd.blip(); }
+    const slot = invSlots.findIndex((s, i) => i < 9 && s && s.id === hit.b);
+    if (slot >= 0) setSel(slot);
+    else { // 가방에 있으면 핫바로 끌어오기
+      const bag = invSlots.findIndex((s, i) => i >= 9 && s && s.id === hit.b);
+      if (bag >= 0) { const tmp = invSlots[selSlot]; invSlots[selSlot] = invSlots[bag]; invSlots[bag] = tmp; setSel(selSlot); }
+    }
+    snd.blip();
   } else {
-    hotbar[selSlot] = hit.b; drawHotbar(); snd.blip();
+    invSlots[selSlot] = { id: hit.b, n: 1 };
+    setSel(selSlot); snd.blip();
   }
 }
 
@@ -1494,10 +1575,16 @@ function updateDrops(dt) {
       np.y = Math.floor(np.y - 0.15) + 1 + 0.18 + Math.sin(d.age * 3) * 0.04;
     }
     d.s.position.copy(np);
-    // 줍기
+    // 자석처럼 끌려오다가 줍기
     if (d.age > 0.4 && !dead) {
       const dx = d.s.position.x - pos.x, dy = d.s.position.y - (pos.y + 0.9), dz = d.s.position.z - pos.z;
-      if (dx*dx + dy*dy + dz*dz < 2.1) {
+      const d2 = dx*dx + dy*dy + dz*dz;
+      if (d2 < 7) {
+        const target = new THREE.Vector3(pos.x, pos.y + 0.9, pos.z);
+        d.s.position.lerp(target, Math.min(1, dt * 9));
+        d.v.set(0, 0, 0);
+      }
+      if (d2 < 0.7) {
         addItem(d.id, d.n);
         snd.pop();
         scene.remove(d.s);
@@ -1506,6 +1593,32 @@ function updateDrops(dt) {
     }
   }
 }
+
+// 채굴 균열 오버레이 (4단계)
+const crackTexs = [0, 1, 2, 3].map(st => {
+  const c = document.createElement('canvas'); c.width = c.height = 16;
+  const g = c.getContext('2d');
+  const rng = mulberry32(777 + st);
+  g.fillStyle = 'rgba(10,10,10,0.75)';
+  for (let k = 0; k < (st + 1) * 4; k++) {
+    let x = (rng() * 16) | 0, y = (rng() * 16) | 0;
+    for (let s = 0; s < 6 + st * 3; s++) {
+      g.fillRect(x, y, 1, 1);
+      x += rng() < 0.5 ? 1 : -1;
+      y += rng() < 0.5 ? 1 : 0;
+      x = Math.max(0, Math.min(15, x)); y = Math.max(0, Math.min(15, y));
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.NearestFilter;
+  return t;
+});
+const crackMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(1.005, 1.005, 1.005),
+  new THREE.MeshBasicMaterial({ map: crackTexs[0], transparent: true, depthWrite: false })
+);
+crackMesh.visible = false;
+scene.add(crackMesh);
 
 // 선택 블록 외곽선
 const selBox = new THREE.LineSegments(
@@ -1988,6 +2101,7 @@ function tryAttackMob() {
   }
   if (!bestM) return false;
   snd.swing();
+  swingHand();
   const dir = rc.direction;
   const d = swordDmg(), kx = dir.x * 7, kz = dir.z * 7;
   if (isHost()) applyMobHit(bestM.i, d, kx, kz);
@@ -2264,25 +2378,79 @@ function drawItemIcon(ctx, id, cx0, cy0, S) {
   if (id < 100) drawBlockIcon(ctx, id, cx0, cy0, S);
   else { ctx.imageSmoothingEnabled = false; ctx.drawImage(itemCanvas(id), cx0 - S, cy0 - S, S * 2, S * 2); }
 }
+function drawHand() {
+  const c = $('handcv');
+  if (!c) return;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 150, 150);
+  const s = invSlots[selSlot];
+  if (s) drawItemIcon(g, s.id, 75, 78, 36);
+}
+function swingHand() {
+  const h = $('hand');
+  if (!h) return;
+  h.classList.remove('swing');
+  void h.offsetWidth;
+  h.classList.add('swing');
+}
 function drawHotbar() {
   const bar = $('hotbar');
   bar.innerHTML = '';
-  hotbar.forEach((id, i) => {
-    const empty = survival && id != null && countOf(id) === 0;
+  for (let i = 0; i < 9; i++) {
+    const s = invSlots[i];
     const d = document.createElement('div');
-    d.className = 'slot' + (i === selSlot ? ' sel' : '') + (empty ? ' empty' : '');
+    d.className = 'slot' + (i === selSlot ? ' sel' : '');
     const c = document.createElement('canvas'); c.width = c.height = 52;
-    if (id != null) drawItemIcon(c.getContext('2d'), id, 26, 26, 13);
+    if (s) drawItemIcon(c.getContext('2d'), s.id, 26, 26, 13);
     const num = document.createElement('span'); num.className = 'num'; num.textContent = i + 1;
     d.appendChild(c); d.appendChild(num);
-    if (survival && id != null) {
+    if (survival && s && s.n > 1) {
       const cnt = document.createElement('span'); cnt.className = 'cnt';
-      const n = countOf(id);
-      cnt.textContent = id >= 100 ? '' : (n > 0 ? n : '');
+      cnt.textContent = s.n;
       d.appendChild(cnt);
     }
     bar.appendChild(d);
-  });
+  }
+}
+// ── 인벤토리 화면: 슬롯 클릭으로 옮기기 ──
+function slotClick(idx, shiftKey) {
+  const s = invSlots[idx];
+  if (shiftKey && !cursorStack) {
+    if (!s) return;
+    // 핫바 ↔ 가방 빠른 이동
+    const [from, to] = idx < 9 ? [9, INV_SIZE] : [0, 9];
+    for (let i = from; i < to && s.n > 0; i++) {
+      const t = invSlots[i];
+      if (t && t.id === s.id && t.n < stackMax(s.id)) { const a = Math.min(s.n, stackMax(s.id) - t.n); t.n += a; s.n -= a; }
+    }
+    for (let i = from; i < to && s.n > 0; i++) {
+      if (!invSlots[i]) { invSlots[i] = { id: s.id, n: s.n }; s.n = 0; }
+    }
+    if (s.n <= 0) invSlots[idx] = null;
+  } else if (!cursorStack) {
+    if (!s) return;
+    cursorStack = s;
+    invSlots[idx] = null;
+  } else {
+    if (!s) { invSlots[idx] = cursorStack; cursorStack = null; }
+    else if (s.id === cursorStack.id && s.n < stackMax(s.id)) {
+      const a = Math.min(cursorStack.n, stackMax(s.id) - s.n);
+      s.n += a; cursorStack.n -= a;
+      if (cursorStack.n <= 0) cursorStack = null;
+    } else { invSlots[idx] = cursorStack; cursorStack = s; }
+  }
+  snd.blip();
+  buildInv(); drawHotbar(); drawHand();
+}
+function updateCursorGhost() {
+  const g = $('cursorItem');
+  if (!cursorStack) { g.style.display = 'none'; return; }
+  g.style.display = 'block';
+  const c = g.firstElementChild;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 44, 44);
+  drawItemIcon(ctx, cursorStack.id, 22, 22, 11);
+  g.lastElementChild.textContent = cursorStack.n > 1 ? cursorStack.n : '';
 }
 function buildInv() {
   const grid = $('invgrid');
@@ -2296,30 +2464,42 @@ function buildInv() {
       drawBlockIcon(c.getContext('2d'), id, 28, 28, 14);
       const tip = document.createElement('div'); tip.className = 'tip'; tip.textContent = bl.name;
       d.appendChild(c); d.appendChild(tip);
-      d.onclick = () => { hotbar[selSlot] = id; drawHotbar(); closeInv(); snd.blip(); };
+      d.onclick = () => { invSlots[selSlot] = { id, n: 1 }; setSel(selSlot); closeInv(); snd.blip(); };
       grid.appendChild(d);
     });
     return;
   }
-  // ── 서바이벌: 소지품 ──
-  const owned = [...invCount.entries()].filter(([, n]) => n > 0);
-  if (!owned.length) {
+  // ── 서바이벌: 36칸 그리드 (가방 27 + 핫바 9) ──
+  const makeSlot = idx => {
+    const s = invSlots[idx];
     const d = document.createElement('div');
-    d.style.cssText = 'color:#7a6aa0;font-size:0.85rem;padding:10px';
-    d.textContent = '아직 아이템이 없어요 — 나무나 흙을 캐보세요!';
-    grid.appendChild(d);
-  }
-  for (const [id, n] of owned) {
-    const d = document.createElement('div');
-    d.className = 'invslot';
+    d.className = 'invslot' + (idx === selSlot ? ' isel' : '');
     const c = document.createElement('canvas'); c.width = c.height = 56;
-    drawItemIcon(c.getContext('2d'), id, 28, 28, 14);
-    const cnt = document.createElement('span'); cnt.className = 'cnt'; cnt.textContent = n;
-    const tip = document.createElement('div'); tip.className = 'tip'; tip.textContent = itemName(id);
-    d.appendChild(c); d.appendChild(cnt); d.appendChild(tip);
-    d.onclick = () => { hotbar[selSlot] = id; drawHotbar(); closeInv(); snd.blip(); };
-    grid.appendChild(d);
-  }
+    if (s) drawItemIcon(c.getContext('2d'), s.id, 28, 28, 14);
+    d.appendChild(c);
+    if (s && s.n > 1) {
+      const cnt = document.createElement('span'); cnt.className = 'cnt'; cnt.textContent = s.n;
+      d.appendChild(cnt);
+    }
+    if (s) {
+      const tip = document.createElement('div'); tip.className = 'tip'; tip.textContent = itemName(s.id);
+      d.appendChild(tip);
+    }
+    d.onclick = e => slotClick(idx, e.shiftKey);
+    return d;
+  };
+  const bagWrap = document.createElement('div');
+  bagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:580px';
+  for (let i = 9; i < INV_SIZE; i++) bagWrap.appendChild(makeSlot(i));
+  grid.appendChild(bagWrap);
+  const div = document.createElement('div');
+  div.style.cssText = 'width:100%;height:1px;background:rgba(255,255,255,0.12);margin:10px 0';
+  grid.appendChild(div);
+  const barWrap = document.createElement('div');
+  barWrap.style.cssText = 'display:flex;gap:6px;justify-content:center';
+  for (let i = 0; i < 9; i++) barWrap.appendChild(makeSlot(i));
+  grid.appendChild(barWrap);
+  updateCursorGhost();
   // ── 제작 ──
   const crafts = document.createElement('div');
   crafts.className = 'crafts';
@@ -2416,8 +2596,7 @@ document.addEventListener('mouseup', e => {
 document.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('wheel', e => {
   if (!locked) return;
-  selSlot = (selSlot + (e.deltaY > 0 ? 1 : -1) + 9) % 9;
-  drawHotbar();
+  setSel((selSlot + (e.deltaY > 0 ? 1 : -1) + 9) % 9);
 });
 
 document.addEventListener('keydown', e => {
@@ -2438,7 +2617,12 @@ document.addEventListener('keydown', e => {
   }
   if (e.code === 'KeyF' && locked && !survival) { flying = !flying; vel.y = 0; snd.blip(); }
   if (e.code >= 'Digit1' && e.code <= 'Digit9' && locked) {
-    selSlot = +e.code.slice(5) - 1; drawHotbar();
+    setSel(+e.code.slice(5) - 1);
+  }
+  if (e.code === 'KeyW' && locked && !e.repeat) {
+    const now = performance.now();
+    if (now - lastWTap < 260) sprintLatch = true; // W 두 번 = 질주
+    lastWTap = now;
   }
   if (e.code === 'KeyE') { if (invOpen) closeInv(); else if (locked) openInv(); }
   if ((e.code === 'KeyT' || e.code === 'Enter') && locked) { openChat(); e.preventDefault(); }
@@ -2448,6 +2632,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => {
   delete keysDown[e.code];
   if (e.code === 'Tab') $('plist').style.display = 'none';
+  if (e.code === 'KeyW') sprintLatch = false;
 });
 addEventListener('blur', () => { for (const k in keysDown) delete keysDown[k]; holdL = holdR = false; });
 
@@ -2467,10 +2652,16 @@ function openInv() {
   document.exitPointerLock();
 }
 function closeInv() {
+  if (cursorStack) { const c = cursorStack; cursorStack = null; addItem(c.id, c.n); }
   invOpen = false;
   $('inv').style.display = 'none';
   canvas.requestPointerLock();
 }
+$('inv').addEventListener('mousemove', e => {
+  const g = $('cursorItem');
+  g.style.left = e.clientX + 'px';
+  g.style.top = e.clientY + 'px';
+});
 // ── 채팅
 function openChat() {
   chatOpen = true;
@@ -2567,10 +2758,12 @@ async function startGame() {
     survival = chosenMode === 's';
     $('status').textContent = '오프라인 모드 (혼자 놀기)';
   }
+  invSlots.fill(null);
   if (survival) {
-    hotbar.fill(null);
     hp = 10; airLv = 10; hunger = 10; dead = false;
     try { spawnPt = JSON.parse(localStorage.getItem('mc-spawn-' + room)) || null; } catch (e) { spawnPt = null; }
+  } else {
+    CREATIVE_BAR.forEach((id, i) => invSlots[i] = { id, n: 1 });
   }
   updateSurvivalHUD();
 
@@ -2617,6 +2810,7 @@ async function startGame() {
   if (init) for (const p of init.players) addRemote(p.id, p.name, p.p);
   updateOnline();
   drawHotbar();
+  drawHand();
   buildInv();
 
   worldReady = true;
