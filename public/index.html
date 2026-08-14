@@ -92,7 +92,7 @@
   }
 
   #chatlog {
-    position: absolute; left: 14px; bottom: 90px; width: 420px; max-height: 240px;
+    position: absolute; left: 14px; bottom: 90px; width: min(420px, 34vw); max-height: 240px;
     overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
     font-size: 13px; line-height: 1.55;
   }
@@ -127,7 +127,8 @@
     background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.12);
     position: relative; flex: none;
   }
-  #invmain { display: flex; gap: 26px; align-items: flex-start; justify-content: center; }
+  #invmain { display: flex; gap: 26px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+  #invmain > div:first-child { min-width: 510px; }
   #inv-right {
     width: 320px; max-height: 440px; overflow-y: auto; text-align: left;
     padding-right: 6px; flex: none;
@@ -158,6 +159,9 @@
   .modebtn.sel { border-color: #a78bfa; color: #f0e6c8; background: #1c1838; }
 
   /* ── 서바이벌 HUD ── */
+  #hearts, #airbar, #info {
+    font-family: 'Segoe UI', 'Noto Color Emoji', 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif;
+  }
   #hearts {
     position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%);
     font-size: 16px; letter-spacing: 1px; text-shadow: 0 1px 3px #000; display: none;
@@ -204,7 +208,7 @@
   #cursorItem canvas { image-rendering: pixelated; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.7)); }
   #cursorItem .cnt { position: absolute; bottom: 0; right: 2px; font-size: 12px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; }
   #itemname {
-    position: absolute; left: 50%; bottom: 126px; transform: translateX(-50%);
+    position: absolute; left: 50%; bottom: 148px; transform: translateX(-50%);
     font-size: 14px; color: #f0e6c8; text-shadow: 0 1px 4px #000;
     opacity: 0; transition: opacity 0.5s; pointer-events: none; letter-spacing: 1px;
   }
@@ -3931,7 +3935,7 @@ function frame(now) {
   if (fpsT >= 0.5) { fps = Math.round(fpsN / fpsT); fpsN = 0; fpsT = 0; }
 
   if (locked && !invOpen && !chatOpen && !chestOpen && !dead) {
-    phyAcc = Math.min(0.15, phyAcc + dt);
+    phyAcc = Math.min(0.34, phyAcc + dt);
     while (phyAcc >= 1 / 60) {
       prevPos.copy(pos);
       stepPhysics(1 / 60);
