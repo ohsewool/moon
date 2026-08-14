@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "moonvibe",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "WORLD", "class_name": "WorldDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorldDO"] }],
+  "observability": { "enabled": true }
+}
