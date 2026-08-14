@@ -144,10 +144,10 @@ export class WorldDO {
         await this.state.storage.put('p:' + a.uid, m.d);
       }
     } else if (m.t === 'copen') {
-      // 상자 열기 — 내용물 전송
+      // 상자 열기 — 내용물 전송 (fresh = 한 번도 열린 적 없음 → 클라이언트가 보물 생성)
       const key = 'chest:' + (m.x | 0) + ',' + (m.y | 0) + ',' + (m.z | 0);
-      const s = (await this.state.storage.get(key)) || Array(27).fill(null);
-      ws.send(JSON.stringify({ t: 'chest', x: m.x | 0, y: m.y | 0, z: m.z | 0, s }));
+      const stored = await this.state.storage.get(key);
+      ws.send(JSON.stringify({ t: 'chest', x: m.x | 0, y: m.y | 0, z: m.z | 0, s: stored || Array(27).fill(null), fresh: !stored }));
     } else if (m.t === 'cset') {
       // 상자 내용 갱신 — 저장 + 열어둔 다른 사람에게 방송
       if (!Array.isArray(m.s) || m.s.length > 27) return;
