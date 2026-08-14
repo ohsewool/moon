@@ -157,6 +157,7 @@ export class WorldDO {
         if (id < 1 || id > 130 || n < 1 || n > 64) return null;
         const out = { id, n };
         if (Number.isFinite(v.d)) out.d = v.d | 0;
+        if (Number.isFinite(v.ench)) out.ench = Math.min(3, v.ench | 0);
         return out;
       });
       const key = 'chest:' + (m.x | 0) + ',' + (m.y | 0) + ',' + (m.z | 0);

@@ -216,6 +216,17 @@
   #hand canvas { image-rendering: pixelated; }
   #hand.swing { animation: handswing 0.18s ease-out; }
 
+  /* ── 경험치 바 ── */
+  #xpbar {
+    position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
+    width: 260px; display: none; align-items: center; gap: 8px;
+    display: none;
+  }
+  #xpbar .xlv { font-size: 12px; font-weight: bold; color: #7ce87c; text-shadow: 0 1px 3px #000; }
+  #xpbar .xtrack { flex: 1; height: 5px; background: rgba(0,0,0,0.55); border-radius: 3px; overflow: hidden; }
+  #xpbar .xfill { height: 100%; background: #7ce87c; width: 0%; }
+  #xpbar[style*="block"] { display: flex !important; }
+
   /* ── 보스 체력바 ── */
   #bossbar {
     position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
@@ -355,6 +366,7 @@
   <div id="mineprog"><div class="fill"></div></div>
   <div id="airbar"></div>
   <div id="hearts"></div>
+  <div id="xpbar"><span class="xlv">Lv 0</span><div class="xtrack"><div class="xfill"></div></div></div>
   <div id="itemname"></div>
   <div id="hand"><canvas id="handcv" width="150" height="150"></canvas></div>
   <div id="hotbar"></div>
@@ -402,7 +414,7 @@ const $ = id => document.getElementById(id);
 // tiles: [윗면, 옆면, 아랫면] 아틀라스 타일 번호
 const B = { air:0, grass:1, dirt:2, stone:3, cobble:4, sand:5, log:6, leaves:7, planks:8,
             glass:9, brick:10, snow:11, water:12, glow:13, flower_r:14, flower_y:15, tgrass:16, bedrock:17,
-            coalore:18, ironore:19, diaore:20, furnace:21, bed:22, torch:23, chest:24, heart:25, altar:26 };
+            coalore:18, ironore:19, diaore:20, furnace:21, bed:22, torch:23, chest:24, heart:25, altar:26, crop:27, wheat:28 };
 // hard: 채굴 시간(초). pick:true = 곡괭이 필요(맨손이면 5.5배 느리고 드롭 없음)
 // dropTo: 부쉈을 때 나오는 아이템 (없으면 자기 자신, null이면 아무것도 안 나옴)
 const BLOCKS = [
@@ -433,6 +445,8 @@ const BLOCKS = [
   { name:'상자',        kind:'solid', solid:true, occl:true, tiles:[26,27,26], inv:true, hard:1.2 },
   { name:'달의 심장',   kind:'solid', solid:true, occl:true, tiles:[29,29,29], inv:true, hard:1.5, pick:true },
   { name:'달의 제단',   kind:'solid', solid:true, occl:true, tiles:[28,28,28], inv:true, hard:2.2, pick:true },
+  { name:'밀 새싹',     kind:'cross', solid:false, occl:false, tiles:[30,30,30], hard:0.05, dropTo:122 },
+  { name:'밀',          kind:'cross', solid:false, occl:false, tiles:[31,31,31], hard:0.05, dropTo:123 },
 ];
 
 // ── 도구·재료·음식 아이템 (id 100+) ──
@@ -460,6 +474,9 @@ const ITEMS = {
 };
 ITEMS[120] = { name: '활', dur: 96 };
 ITEMS[121] = { name: '화살' };
+ITEMS[122] = { name: '씨앗' };
+ITEMS[123] = { name: '밀' };
+ITEMS[124] = { name: '빵', food: 5 };
 // 도구 내구도
 ITEMS[101].dur = 60;   ITEMS[103].dur = 60;
 ITEMS[102].dur = 132;  ITEMS[104].dur = 132;
@@ -533,6 +550,18 @@ function itemCanvas(id) {
     g.fillStyle = wood;
     for (let i = 0; i < 7; i++) g.fillRect(4 + i, 11 - i, 2, 2);
     g.fillStyle = '#e8e0d0'; g.fillRect(2, 12, 3, 2); g.fillRect(3, 11, 2, 3);
+  } else if (id === 122) { // 씨앗
+    g.fillStyle = '#7cbd4b';
+    g.fillRect(5, 6, 2, 2); g.fillRect(9, 5, 2, 2); g.fillRect(7, 9, 2, 2); g.fillRect(4, 10, 2, 2); g.fillRect(10, 9, 2, 2);
+  } else if (id === 123) { // 밀
+    for (let i = 0; i < 4; i++) {
+      g.fillStyle = '#c8a83c'; g.fillRect(4 + i * 3, 5, 1, 9);
+      g.fillStyle = '#e8cc5a'; g.fillRect(3 + i * 3, 2, 3, 4);
+    }
+  } else if (id === 124) { // 빵
+    g.fillStyle = '#b8843c'; g.fillRect(2, 6, 12, 5);
+    g.fillStyle = '#d8a860'; g.fillRect(3, 5, 10, 3);
+    g.fillStyle = '#96682e'; g.fillRect(4, 8, 2, 1); g.fillRect(8, 9, 2, 1); g.fillRect(11, 8, 2, 1);
   } else if (id === 118 || id === 119) { // 갑옷
     const col = id === 118 ? '#d8d8d8' : '#4fd8d8';
     const dark = id === 118 ? '#9a9a9a' : '#2aa8a8';
@@ -573,6 +602,7 @@ const RECIPES = [
   { out: [B.altar, 1], ins: [[108, 4], [13, 4], [3, 8]] },     // 달의 제단 (다이아4+발광석4+돌8)
   { out: [120, 1], ins: [[100, 3], [16, 2]] },                 // 활 (막대+수풀)
   { out: [121, 3], ins: [[100, 1], [4, 1]] },                  // 화살 3
+  { out: [124, 1], ins: [[123, 3]] },                          // 빵 (밀3)
 ];
 function nearFurnace() {
   const px = Math.floor(pos.x), py = Math.floor(pos.y + 1), pz = Math.floor(pos.z);
@@ -796,12 +826,27 @@ tile(28, c => {
   c.fillStyle = '#e8e0f8'; c.fillRect(6, 6, 4, 4);
   c.fillStyle = '#8ef4ef'; c.fillRect(7, 3, 2, 2); c.fillRect(7, 11, 2, 2); c.fillRect(3, 7, 2, 2); c.fillRect(11, 7, 2, 2);
 });
+// 30/31은 아래 (농작물)
 // 29 달의 심장
 tile(29, c => {
   fillNoise(c, '#e8e6f4', ['#dcd8ec','#f4f2fc','#d0ccdf'], 80);
   c.fillStyle = '#8ef4ef'; c.fillRect(5, 5, 6, 6);
   c.fillStyle = '#fff'; c.fillRect(6, 6, 3, 3);
   c.fillStyle = '#c0b8f0'; c.fillRect(3, 3, 2, 2); c.fillRect(11, 11, 2, 2); c.fillRect(11, 3, 2, 2); c.fillRect(3, 11, 2, 2);
+});
+
+// 30 밀 새싹
+tile(30, c => {
+  c.fillStyle = '#5aa03c';
+  for (let i = 0; i < 6; i++) { const x = 2 + i * 2 + (tr()*2|0); c.fillRect(x, 12 - (tr()*3|0), 1, 4 + (tr()*2|0)); }
+});
+// 31 다 자란 밀
+tile(31, c => {
+  for (let i = 0; i < 7; i++) {
+    const x = 1 + i * 2;
+    c.fillStyle = '#c8a83c'; c.fillRect(x, 4, 1, 12);
+    c.fillStyle = '#e8cc5a'; c.fillRect(x, 2, 2, 4); c.fillRect(x - 1, 3, 1, 2);
+  }
 });
 
 const atlasTex = new THREE.CanvasTexture(atlasCanvas);
@@ -897,6 +942,7 @@ function getB(x, y, z) {
   return vox[(x << 14) | (z << 6) | y];
 }
 const glowSet = new Map(); // "x,y,z" -> 블록 id (횃불/발광석 위치)
+const cropSet = new Set(); // 자라는 중인 밀 새싹 위치
 function setB(x, y, z, b) {
   if ((x | y | z) < 0 || x >= WSIZE || z >= WSIZE || y >= WH) return;
   const c = chunks.get(cKey(x >> 4, z >> 4));
@@ -906,6 +952,7 @@ function setB(x, y, z, b) {
   const k = x + ',' + y + ',' + z;
   if (b === 23 || b === 13 || b === 25 || b === 26) glowSet.set(k, b); // 횃불·발광석·달의 심장·제단
   else glowSet.delete(k);
+  if (b === 27) cropSet.add(k); else cropSet.delete(k); // 자라는 중인 밀
 }
 function syncVoxFromChunks() {
   for (const [key, data] of chunks) {
@@ -1766,6 +1813,27 @@ let survival = false, hostId = null;
 let hp = 10, airLv = 10, hunger = 10, dead = false;
 let lastDmgT = -99, regenAcc = 0, drownAcc = 0, fallPeak = 0, lastMobHurt = 0;
 let hungerAcc = 0, starveAcc = 0, eatCd = 0;
+let xp = 0;
+function xpLevel() { return Math.floor(Math.sqrt(xp / 8)); }
+function addXp(n) {
+  if (!survival || n <= 0) return;
+  const before = xpLevel();
+  xp += n;
+  if (xpLevel() > before) { tone(760, 0.12, 'sine', 0.12); setTimeout(() => tone(1020, 0.15, 'sine', 0.12), 100); }
+  updateXpHUD();
+}
+let _lastXpStr = '';
+function updateXpHUD() {
+  if (!survival) { $('xpbar').style.display = 'none'; return; }
+  const lv = xpLevel();
+  const cur = xp - lv * lv * 8, need = ((lv + 1) * (lv + 1) - lv * lv) * 8;
+  const s = lv + '|' + cur + '|' + need;
+  if (s === _lastXpStr) return;
+  _lastXpStr = s;
+  $('xpbar').style.display = 'block';
+  $('xpbar').querySelector('.xlv').textContent = 'Lv ' + lv;
+  $('xpbar').querySelector('.xfill').style.width = Math.min(100, cur / need * 100) + '%';
+}
 function pickTier() {
   const s = heldItem();
   if (s && s.id >= 100 && ITEMS[s.id] && ITEMS[s.id].pickTier) return ITEMS[s.id].pickTier;
@@ -1773,7 +1841,7 @@ function pickTier() {
 }
 function swordDmg() {
   const s = heldItem();
-  if (s && s.id >= 100 && ITEMS[s.id] && ITEMS[s.id].dmg) return ITEMS[s.id].dmg;
+  if (s && s.id >= 100 && ITEMS[s.id] && ITEMS[s.id].dmg) return ITEMS[s.id].dmg + (s.ench || 0);
   return 1;
 }
 const TIER_SPEED = { 1: 1, 2: 0.55, 3: 0.38, 4: 0.28 };
@@ -1783,6 +1851,8 @@ function mineTime(b) {
   if (bl.pick) {
     const tier = pickTier(), need = bl.minTier || 1;
     t = tier < need ? t * 5.5 : t * TIER_SPEED[tier];
+    const s = heldItem();
+    if (s && s.ench) t *= [1, 0.82, 0.68, 0.55][s.ench];
   }
   return t;
 }
@@ -1790,13 +1860,14 @@ function dropOf(b) {
   const bl = BLOCKS[b];
   if (bl.pick && pickTier() < (bl.minTier || 1)) return null; // 등급 부족 → 드롭 없음
   if (b === B.leaves) return Math.random() < 0.08 ? 117 : null; // 나뭇잎 → 가끔 사과
+  if (b === B.tgrass) { const r = Math.random(); return r < 0.35 ? 122 : r < 0.75 ? B.tgrass : null; } // 수풀 → 씨앗
   return bl.dropTo === undefined ? b : bl.dropTo;
 }
 
 function damage(n, cause) {
   if (!survival || dead || n <= 0) return;
-  if (countOf(119) > 0) n *= ITEMS[119].armor;      // 다이아 갑옷
-  else if (countOf(118) > 0) n *= ITEMS[118].armor; // 철 갑옷
+  const armorSlot = invSlots.find(s => s && s.id === 119) || invSlots.find(s => s && s.id === 118);
+  if (armorSlot) n *= ITEMS[armorSlot.id].armor * (1 - 0.07 * (armorSlot.ench || 0));
   hp = Math.max(0, hp - n);
   lastDmgT = performance.now() / 1000;
   regenAcc = 0;
@@ -1874,6 +1945,7 @@ function fireArrow() {
   if (t < 0.15) return;
   if (!takeItem(121, 1)) return;
   const power = 0.35 + (t / 1.2) * 0.65;
+  const bowEnch = (heldItem() && heldItem().ench) || 0;
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
   const mesh = new THREE.Mesh(
@@ -1885,7 +1957,7 @@ function fireArrow() {
   arrows.push({
     mesh,
     v: dir.clone().multiplyScalar(15 + 17 * power),
-    dmg: Math.round(2 + 5 * power),
+    dmg: Math.round(2 + 5 * power) + bowEnch,
     life: 5, stuck: 0,
   });
   snd.bow();
@@ -1920,6 +1992,7 @@ function updateArrows(dt) {
       const kx = a.v.x * 0.4, kz = a.v.z * 0.4;
       if (isHost()) applyMobHit(hitMob.i, a.dmg, kx, kz);
       else net.send({ t: 'mobhit', i: hitMob.i, d: a.dmg, kx, kz });
+      if (hitMob.hp - a.dmg <= 0) addXp(MOB_DEF[hitMob.type].hostile ? 3 : 1);
       scene.remove(a.mesh); arrows.splice(i, 1);
       continue;
     }
@@ -1957,8 +2030,15 @@ function tickMining(dt) {
     applyEdit(bx, by, bz, 0, false);
     snd.break();
     if (drop !== null) spawnDrop(bx + 0.5, by + 0.4, bz + 0.5, drop, 1);
+    if (mining.b === B.wheat) { // 밀 수확 보너스: 씨앗 + 추가 밀
+      spawnDrop(bx + 0.3, by + 0.4, bz + 0.3, 122, 1 + (Math.random() < 0.5 ? 1 : 0));
+      if (Math.random() < 0.4) spawnDrop(bx + 0.7, by + 0.4, bz + 0.7, 123, 1);
+    }
     if (wasChest) breakChest(bx, by, bz);
     if (BLOCKS[mining.b].hard >= 0.3) damageHeldTool();
+    if (mining.b === B.coalore) addXp(1);
+    else if (mining.b === B.ironore) addXp(2);
+    else if (mining.b === B.diaore) addXp(5);
     mining = null;
     el.style.display = 'none';
     crackMesh.visible = false;
@@ -2128,8 +2208,22 @@ function doPlace() {
     if (bHit && bHit.b === B.altar) { trySummonBoss(bHit.x, bHit.y, bHit.z); return; }
     if (survival && bHit && bHit.b === B.bed) { bedInteract(bHit); return; }
   }
-  // 활이면 시위 당기기 시작
   const heldS = heldItem();
+  // 씨앗 심기
+  if (survival && heldS && heldS.id === 122) {
+    const hit = raycast();
+    if (hit) {
+      const below = getB(hit.px, hit.py - 1, hit.pz);
+      if ((below === B.grass || below === B.dirt) && getB(hit.px, hit.py, hit.pz) === 0) {
+        takeFromSel(1);
+        applyEdit(hit.px, hit.py, hit.pz, B.crop, false);
+        snd.place();
+        swingHand();
+      }
+    }
+    return;
+  }
+  // 활이면 시위 당기기 시작
   if (survival && heldS && heldS.id === 120) {
     if (!bowCharge) {
       if (countOf(121) < 1) { showItemName('화살이 없어요!'); return; }
@@ -2599,6 +2693,7 @@ function bossDefeated(x, y, z) {
     spawnDrop(x + 0.5, y + 1, z + 0.5, 108, 3); // 다이아 3개 보너스
   }
   sysMsg('🌕 달의 수호자가 쓰러졌다!');
+  addXp(30);
   setTimeout(showEnding, 1600);
 }
 let endingShown = false;
@@ -2935,6 +3030,7 @@ function tryAttackMob() {
   const d = swordDmg(), kx = dir.x * 7, kz = dir.z * 7;
   if (isHost()) applyMobHit(bestM.i, d, kx, kz);
   else net.send({ t: 'mobhit', i: bestM.i, d, kx, kz });
+  if (bestM.hp - d <= 0) addXp(MOB_DEF[bestM.type].hostile ? 3 : 1); // 처치 경험치
   const held = heldItem();
   if (held && ITEMS[held.id] && ITEMS[held.id].dmg) damageHeldTool(); // 검 내구도
   return true;
@@ -3013,7 +3109,7 @@ function playerUid() { // 기기별 고유 id — 인벤토리 저장 키
 function savePlayer() {
   if (!survival || !worldReady || !net.ready || dead) return;
   net.send({ t: 'save', d: {
-    inv: invSlots, hp: +hp.toFixed(1), hu: hunger,
+    inv: invSlots, hp: +hp.toFixed(1), hu: hunger, xp,
     pos: [+pos.x.toFixed(1), +pos.y.toFixed(1), +pos.z.toFixed(1)],
     sp: spawnPt,
   } });
@@ -3027,12 +3123,14 @@ function restorePlayer(d) {
       if (v && typeof v === 'object' && (v.id | 0) > 0 && (v.n | 0) > 0) {
         const s = { id: v.id | 0, n: Math.min(64, v.n | 0) };
         if (Number.isFinite(v.d)) s.d = v.d | 0;
+        if (Number.isFinite(v.ench)) s.ench = Math.min(3, v.ench | 0);
         invSlots[i] = s;
       } else invSlots[i] = null;
     });
   }
   if (Number.isFinite(d.hp)) hp = Math.max(1, Math.min(10, d.hp));
   if (Number.isFinite(d.hu)) hunger = Math.max(0, Math.min(10, d.hu));
+  if (Number.isFinite(d.xp)) xp = Math.max(0, d.xp | 0);
   if (Array.isArray(d.sp) && d.sp.length === 3) spawnPt = d.sp;
   if (Array.isArray(d.pos) && d.pos.length === 3 && Number.isFinite(d.pos[0])) {
     return { pos: d.pos };
@@ -3276,8 +3374,14 @@ function drawItemIcon(ctx, id, cx0, cy0, S) {
   if (id < 100) drawBlockIcon(ctx, id, cx0, cy0, S);
   else { ctx.imageSmoothingEnabled = false; ctx.drawImage(itemCanvas(id), cx0 - S, cy0 - S, S * 2, S * 2); }
 }
-function drawStack(ctx, s, cx0, cy0, S) { // 아이콘 + 내구도 바
+function drawStack(ctx, s, cx0, cy0, S) { // 아이콘 + 내구도 바 + 인챈트 뱃지
   drawItemIcon(ctx, s.id, cx0, cy0, S);
+  if (s.ench) {
+    ctx.fillStyle = '#c084fc';
+    ctx.font = 'bold ' + Math.max(9, S * 0.6) + 'px sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('+' + s.ench, cx0 - S + 1, cy0 - S + 1);
+  }
   if (s.d != null && ITEMS[s.id] && ITEMS[s.id].dur && s.d < ITEMS[s.id].dur) {
     const frac = Math.max(0, s.d / ITEMS[s.id].dur);
     ctx.fillStyle = '#1a1a1a'; ctx.fillRect(cx0 - S, cy0 + S - 4, S * 2, 3);
@@ -3449,6 +3553,47 @@ function buildInv() {
       buildInv(); // 갱신
     };
     row.appendChild(c); row.appendChild(body); row.appendChild(btn);
+    right.appendChild(row);
+  }
+  // ── 강화 (들고 있는 아이템에 적용) ──
+  const et = document.createElement('div');
+  et.style.cssText = 'font-size:0.72rem;color:#c084fc;letter-spacing:2px;margin:14px 0 8px';
+  et.textContent = '✦ 강화';
+  right.appendChild(et);
+  const held = heldItem();
+  const enchOk = held && held.id >= 100 && ITEMS[held.id] &&
+    (ITEMS[held.id].dmg || ITEMS[held.id].pickTier || held.id === 120 || ITEMS[held.id].armor);
+  if (!enchOk) {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:0.75rem;color:#7a6aa0;line-height:1.6';
+    hint.textContent = '도구·검·활·갑옷을 손에 들면 다이아와 경험치로 강화할 수 있어요 (최대 +3)';
+    right.appendChild(hint);
+  } else {
+    const lvl = held.ench || 0;
+    const cost = 50 * (lvl + 1);
+    const row = document.createElement('div'); row.className = 'recipe';
+    const c2 = document.createElement('canvas'); c2.width = c2.height = 30;
+    drawStack(c2.getContext('2d'), held, 15, 15, 7);
+    const body = document.createElement('div'); body.className = 'rbody';
+    const nm = document.createElement('div'); nm.className = 'rname';
+    nm.textContent = `${itemName(held.id)} ${lvl ? '+' + lvl : ''} → +${lvl + 1}`;
+    const costEl = document.createElement('div'); costEl.className = 'rcost';
+    costEl.textContent = lvl >= 3 ? '최대 강화됨' : `다이아 1 + 경험치 ${cost} (현재 ${xp})`;
+    body.appendChild(nm); body.appendChild(costEl);
+    const btn = document.createElement('button');
+    btn.textContent = '강화';
+    btn.disabled = lvl >= 3 || xp < cost || countOf(108) < 1;
+    btn.onclick = () => {
+      if (btn.disabled) return;
+      takeItem(108, 1);
+      xp -= cost;
+      held.ench = lvl + 1;
+      snd.fanfare();
+      updateXpHUD(); _lastXpStr = '';
+      drawHotbar(); drawHand();
+      buildInv();
+    };
+    row.appendChild(c2); row.appendChild(body); row.appendChild(btn);
     right.appendChild(row);
   }
   main.appendChild(right);
@@ -3762,6 +3907,7 @@ async function startGame() {
   drawHotbar();
   drawHand();
   buildInv();
+  updateXpHUD();
 
   worldReady = true;
   playing = true;
@@ -3840,6 +3986,19 @@ function frame(now) {
   updateDrops(dt);
   updateArrows(dt);
   updateFx(dt);
+  // 밀 성장 (호스트가 굴림)
+  if (survival && isHost() && cropSet.size) {
+    frame._cropT = (frame._cropT || 0) + dt;
+    if (frame._cropT > 6) {
+      frame._cropT = 0;
+      for (const k of [...cropSet]) {
+        if (Math.random() < 0.13) {
+          const [cx2, cy2, cz2] = k.split(',').map(Number);
+          applyEdit(cx2, cy2, cz2, B.wheat, false);
+        }
+      }
+    }
+  }
   updateSky();
   // 활 시위 게이지
   if (bowCharge) {
