@@ -64,7 +64,9 @@ export class WorldDO {
       const t0 = (await this.state.storage.get('t0')) || Date.now();
       const id = crypto.randomUUID().slice(0, 8);
       const name = String(m.name || '플레이어').replace(/[\r\n]/g, ' ').slice(0, 16).trim() || '플레이어';
-      ws.serializeAttachment({ id, name, joinT: Date.now(), lastChat: 0 });
+      const uid = (typeof m.uid === 'string' && /^[\w-]{6,40}$/.test(m.uid)) ? m.uid : null;
+      ws.serializeAttachment({ id, name, uid, joinT: Date.now(), lastChat: 0 });
+      const pdata = uid ? (await this.state.storage.get('p:' + uid)) || null : null;
 
       const stored = await this.state.storage.list({ prefix: 'e:' });
       const edits = {};
@@ -79,7 +81,7 @@ export class WorldDO {
 
       ws.send(JSON.stringify({
         t: 'init', id, name, seed, mode, t0, now: Date.now(),
-        host: this.currentHost(), edits, players,
+        host: this.currentHost(), edits, players, pdata,
       }));
       this.broadcast({ t: 'pjoin', id, name }, ws);
       return;
@@ -130,6 +132,38 @@ export class WorldDO {
     } else if (m.t === 'boom') {
       // 크리퍼 폭발 연출/데미지 중계
       this.broadcast({ t: 'boom', x: +m.x || 0, y: +m.y || 0, z: +m.z || 0 }, ws);
+    } else if (m.t === 'save') {
+      // 플레이어 데이터 저장 (인벤토리/체력/위치)
+      if (a.uid && m.d && typeof m.d === 'object') {
+        await this.state.storage.put('p:' + a.uid, m.d);
+      }
+    } else if (m.t === 'copen') {
+      // 상자 열기 — 내용물 전송
+      const key = 'chest:' + (m.x | 0) + ',' + (m.y | 0) + ',' + (m.z | 0);
+      const s = (await this.state.storage.get(key)) || Array(27).fill(null);
+      ws.send(JSON.stringify({ t: 'chest', x: m.x | 0, y: m.y | 0, z: m.z | 0, s }));
+    } else if (m.t === 'cset') {
+      // 상자 내용 갱신 — 저장 + 열어둔 다른 사람에게 방송
+      if (!Array.isArray(m.s) || m.s.length > 27) return;
+      const s = m.s.slice(0, 27).map(v => {
+        if (!v || typeof v !== 'object') return null;
+        const id = v.id | 0, n = v.n | 0;
+        if (id < 1 || id > 130 || n < 1 || n > 64) return null;
+        const out = { id, n };
+        if (Number.isFinite(v.d)) out.d = v.d | 0;
+        return out;
+      });
+      const key = 'chest:' + (m.x | 0) + ',' + (m.y | 0) + ',' + (m.z | 0);
+      await this.state.storage.put(key, s);
+      this.broadcast({ t: 'chest', x: m.x | 0, y: m.y | 0, z: m.z | 0, s }, ws);
+    } else if (m.t === 'cbreak') {
+      // 상자 파괴 — 내용물을 부순 사람에게 돌려줌
+      const key = 'chest:' + (m.x | 0) + ',' + (m.y | 0) + ',' + (m.z | 0);
+      const s = await this.state.storage.get(key);
+      await this.state.storage.delete(key);
+      const items = [];
+      if (Array.isArray(s)) for (const v of s) if (v && v.id) items.push([v.id, v.n || 1]);
+      ws.send(JSON.stringify({ t: 'spill', x: m.x | 0, y: m.y | 0, z: m.z | 0, items }));
     }
   }
 

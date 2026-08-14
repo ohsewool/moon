@@ -305,6 +305,18 @@
   </div>
 </div>
 
+<!-- 상자 -->
+<div class="overlay" id="chestov" style="display:none">
+  <div class="panel" style="max-width:640px">
+    <h1 style="font-size:1.2rem">📦 상자</h1>
+    <div class="sub">모두가 함께 쓰는 보관함 — 클릭 = 집기/놓기 · Shift+클릭 = 상자↔인벤 이동 (E 닫기)</div>
+    <div id="chestgrid"></div>
+    <div style="width:100%;height:1px;background:rgba(255,255,255,0.12);margin:12px 0"></div>
+    <div class="sub" style="margin-bottom:8px">내 인벤토리</div>
+    <div id="chestinv"></div>
+  </div>
+</div>
+
 <!-- HUD -->
 <div id="hud">
   <div id="waterfx"></div>
@@ -336,7 +348,7 @@ const $ = id => document.getElementById(id);
 // tiles: [윗면, 옆면, 아랫면] 아틀라스 타일 번호
 const B = { air:0, grass:1, dirt:2, stone:3, cobble:4, sand:5, log:6, leaves:7, planks:8,
             glass:9, brick:10, snow:11, water:12, glow:13, flower_r:14, flower_y:15, tgrass:16, bedrock:17,
-            coalore:18, ironore:19, diaore:20, furnace:21, bed:22, torch:23 };
+            coalore:18, ironore:19, diaore:20, furnace:21, bed:22, torch:23, chest:24 };
 // hard: 채굴 시간(초). pick:true = 곡괭이 필요(맨손이면 5.5배 느리고 드롭 없음)
 // dropTo: 부쉈을 때 나오는 아이템 (없으면 자기 자신, null이면 아무것도 안 나옴)
 const BLOCKS = [
@@ -364,6 +376,7 @@ const BLOCKS = [
   { name:'화로',        kind:'solid', solid:true, occl:true, tiles:[4,22,4],   inv:true, hard:1.7, pick:true },
   { name:'침대',        kind:'solid', solid:true, occl:true, tiles:[23,25,9],  inv:true, hard:0.8 },
   { name:'횃불',        kind:'cross', solid:false, occl:false, tiles:[24,24,24], inv:true, hard:0.05 },
+  { name:'상자',        kind:'solid', solid:true, occl:true, tiles:[26,27,26], inv:true, hard:1.2 },
 ];
 
 // ── 도구·재료·음식 아이템 (id 100+) ──
@@ -389,6 +402,11 @@ const ITEMS = {
   118: { name: '철 갑옷',     armor: 0.6 },  // 받는 피해 60%
   119: { name: '다이아 갑옷', armor: 0.35 }, // 받는 피해 35%
 };
+// 도구 내구도
+ITEMS[101].dur = 60;   ITEMS[103].dur = 60;
+ITEMS[102].dur = 132;  ITEMS[104].dur = 132;
+ITEMS[109].dur = 251;  ITEMS[110].dur = 251;
+ITEMS[111].dur = 1562; ITEMS[112].dur = 1562;
 function itemName(id) { return id >= 100 ? ITEMS[id].name : BLOCKS[id].name; }
 
 const itemCanvasCache = new Map();
@@ -481,6 +499,7 @@ const RECIPES = [
   { out: [116, 2], ins: [[115, 2], [105, 1]], furnace: true }, // 스테이크
   { out: [B.torch, 4], ins: [[100, 1], [105, 1]] },            // 횃불
   { out: [B.bed, 1],   ins: [[8, 3], [16, 3]] },               // 침대 (판자+수풀)
+  { out: [B.chest, 1], ins: [[8, 8]] },                        // 상자 (판자8)
   { out: [118, 1], ins: [[107, 8]] },                          // 철 갑옷
   { out: [119, 1], ins: [[108, 8]] },                          // 다이아 갑옷
 ];
@@ -684,6 +703,21 @@ tile(25, c => {
   c.fillStyle = '#f0f0f0'; c.fillRect(0, 0, 4, 8);
   c.fillStyle = '#7d5c32'; c.fillRect(0, 8, 16, 1);
 });
+// 26 상자 윗면
+tile(26, c => {
+  fillNoise(c, '#9a7040', ['#8e6638','#a67a48','#845e32'], 60);
+  c.strokeStyle = '#5e402a'; c.lineWidth = 1;
+  c.strokeRect(0.5, 0.5, 15, 15);
+  c.fillStyle = '#5e402a'; c.fillRect(3, 3, 10, 1); c.fillRect(3, 12, 10, 1); c.fillRect(3, 3, 1, 10); c.fillRect(12, 3, 1, 10);
+});
+// 27 상자 앞면 (걸쇠)
+tile(27, c => {
+  fillNoise(c, '#9a7040', ['#8e6638','#a67a48','#845e32'], 60);
+  c.fillStyle = '#5e402a'; c.fillRect(0, 6, 16, 1);
+  c.strokeStyle = '#5e402a'; c.strokeRect(0.5, 0.5, 15, 15);
+  c.fillStyle = '#c8c8c8'; c.fillRect(6, 4, 4, 5);
+  c.fillStyle = '#8a8a8a'; c.fillRect(7, 6, 2, 2);
+});
 
 const atlasTex = new THREE.CanvasTexture(atlasCanvas);
 atlasTex.magFilter = THREE.NearestFilter;
@@ -862,8 +896,8 @@ scene.add(ambLight);
 
 // 횃불/발광석용 동적 광원 풀 (가까운 8개만 실제 광원 사용)
 const lightPool = [];
-for (let i = 0; i < 8; i++) {
-  const pl = new THREE.PointLight(0xffb35e, 0, 10);
+for (let i = 0; i < 14; i++) {
+  const pl = new THREE.PointLight(0xffb35e, 0, 12);
   scene.add(pl);
   lightPool.push(pl);
 }
@@ -1280,7 +1314,23 @@ let selSlot = 0;
 let cursorStack = null; // 인벤토리 화면에서 마우스로 집은 스택
 
 function stackMax(id) { return id >= 100 && ITEMS[id] && !ITEMS[id].food ? 1 : 64; }
+function makeStack(id, n) {
+  const s = { id, n };
+  if (ITEMS[id] && ITEMS[id].dur) s.d = ITEMS[id].dur;
+  return s;
+}
 function heldItem() { return invSlots[selSlot]; }
+function damageHeldTool() {
+  const s = heldItem();
+  if (!s || !ITEMS[s.id] || !ITEMS[s.id].dur) return;
+  s.d = (s.d != null ? s.d : ITEMS[s.id].dur) - 1;
+  if (s.d <= 0) {
+    invSlots[selSlot] = null;
+    tone(180, 0.3, 'square', 0.15, -120); noiseS(0.15, 0.15);
+    sysMsg('💔 ' + itemName(s.id) + '이(가) 부서졌어요!');
+  }
+  drawHotbar(); drawHand();
+}
 function countOf(id) {
   let n = 0;
   for (const s of invSlots) if (s && s.id === id) n += s.n;
@@ -1292,7 +1342,7 @@ function addItem(id, n = 1) {
     if (s && s.id === id && s.n < stackMax(id)) { const a = Math.min(n, stackMax(id) - s.n); s.n += a; n -= a; }
   }
   for (let i = 0; i < INV_SIZE && n > 0; i++) { // 빈 칸 채우기
-    if (!invSlots[i]) { const a = Math.min(n, stackMax(id)); invSlots[i] = { id, n: a }; n -= a; }
+    if (!invSlots[i]) { const a = Math.min(n, stackMax(id)); invSlots[i] = makeStack(id, a); n -= a; }
   }
   if (n > 0) { spawnDrop(pos.x, pos.y + 0.8, pos.z, id, n); sysMsg('⚠ 인벤토리가 가득 찼어요'); }
   drawHotbar(); drawHand();
@@ -1422,13 +1472,15 @@ function doBreak() { // 크리에이티브: 즉시 파괴
   const hit = raycast();
   if (!hit || hit.b === B.bedrock) return;
   spawnBreakFx(hit.x, hit.y, hit.z, BLOCKS[hit.b].color);
+  const wasChest = hit.b === B.chest;
   applyEdit(hit.x, hit.y, hit.z, 0, false);
+  if (wasChest) breakChest(hit.x, hit.y, hit.z);
   snd.break();
   swingHand();
 }
 
 // ── 서바이벌 채굴 ──
-let mining = null, mineSndT = 0;
+let mining = null, mineSndT = 0, atkCdUntil = 0;
 function tickMining(dt) {
   const hit = raycast(4.6);
   if (!hit || hit.b === B.bedrock) { mining = null; $('mineprog').style.display = 'none'; return; }
@@ -1448,15 +1500,134 @@ function tickMining(dt) {
   if (mining.prog >= mining.total) {
     const drop = dropOf(mining.b);
     spawnBreakFx(mining.x, mining.y, mining.z, BLOCKS[mining.b].color);
-    applyEdit(mining.x, mining.y, mining.z, 0, false);
+    const wasChest = mining.b === B.chest;
+    const bx = mining.x, by = mining.y, bz = mining.z;
+    applyEdit(bx, by, bz, 0, false);
     snd.break();
-    if (drop !== null) spawnDrop(mining.x + 0.5, mining.y + 0.4, mining.z + 0.5, drop, 1);
+    if (drop !== null) spawnDrop(bx + 0.5, by + 0.4, bz + 0.5, drop, 1);
+    if (wasChest) breakChest(bx, by, bz);
+    if (BLOCKS[mining.b].hard >= 0.3) damageHeldTool();
     mining = null;
     el.style.display = 'none';
     crackMesh.visible = false;
   }
 }
 function stopMining() { mining = null; $('mineprog').style.display = 'none'; crackMesh.visible = false; }
+
+// ── 상자 (내용물은 서버에 저장, 모두가 공유) ──
+let chestOpen = false, openChest = null, pendingChest = null;
+const localChests = new Map(); // 오프라인 모드용
+const chestKeyOf = (x, y, z) => x + ',' + y + ',' + z;
+
+function openChestAt(x, y, z) {
+  if (net.ready) {
+    pendingChest = { x, y, z };
+    net.send({ t: 'copen', x, y, z });
+  } else {
+    const k = chestKeyOf(x, y, z);
+    if (!localChests.has(k)) localChests.set(k, Array(27).fill(null));
+    showChest(x, y, z, localChests.get(k));
+  }
+}
+function showChest(x, y, z, slots) {
+  openChest = { x, y, z, slots };
+  chestOpen = true;
+  $('chestov').style.display = 'flex';
+  document.exitPointerLock();
+  buildChestUI();
+}
+function closeChest() {
+  if (cursorStack) { const c = cursorStack; cursorStack = null; addItem(c.id, c.n); }
+  chestOpen = false; openChest = null; pendingChest = null;
+  $('chestov').style.display = 'none';
+  canvas.requestPointerLock();
+}
+function pushChestState() {
+  if (!openChest) return;
+  if (net.ready) net.send({ t: 'cset', x: openChest.x, y: openChest.y, z: openChest.z, s: openChest.slots });
+  else localChests.set(chestKeyOf(openChest.x, openChest.y, openChest.z), openChest.slots);
+}
+function containerAdd(slots, id, n, d) { // 반환: 못 넣은 개수
+  for (let i = 0; i < slots.length && n > 0; i++) {
+    const s = slots[i];
+    if (s && s.id === id && s.n < stackMax(id)) { const a = Math.min(n, stackMax(id) - s.n); s.n += a; n -= a; }
+  }
+  for (let i = 0; i < slots.length && n > 0; i++) {
+    if (!slots[i]) { const a = Math.min(n, stackMax(id)); slots[i] = { id, n: a }; if (d != null) slots[i].d = d; n -= a; }
+  }
+  return n;
+}
+function chestSlotClick(arr, idx, shift, otherArr) {
+  const s = arr[idx];
+  if (shift && !cursorStack) {
+    if (!s) return;
+    const left = containerAdd(otherArr, s.id, s.n, s.d);
+    if (left <= 0) arr[idx] = null; else s.n = left;
+  } else if (!cursorStack) {
+    if (!s) return;
+    cursorStack = s; arr[idx] = null;
+  } else {
+    if (!s) { arr[idx] = cursorStack; cursorStack = null; }
+    else if (s.id === cursorStack.id && s.n < stackMax(s.id)) {
+      const a = Math.min(cursorStack.n, stackMax(s.id) - s.n);
+      s.n += a; cursorStack.n -= a;
+      if (cursorStack.n <= 0) cursorStack = null;
+    } else { arr[idx] = cursorStack; cursorStack = s; }
+  }
+  snd.blip();
+  pushChestState();
+  buildChestUI(); drawHotbar(); drawHand();
+}
+function chestSlotEl(arr, idx, otherArr) {
+  const s = arr[idx];
+  const d = document.createElement('div');
+  d.className = 'invslot';
+  const c = document.createElement('canvas'); c.width = c.height = 56;
+  if (s) drawStack(c.getContext('2d'), s, 28, 28, 14);
+  d.appendChild(c);
+  if (s && s.n > 1) { const cnt = document.createElement('span'); cnt.className = 'cnt'; cnt.textContent = s.n; d.appendChild(cnt); }
+  if (s) { const tip = document.createElement('div'); tip.className = 'tip'; tip.textContent = itemName(s.id); d.appendChild(tip); }
+  d.onclick = e => chestSlotClick(arr, idx, e.shiftKey, otherArr);
+  return d;
+}
+function buildChestUI() {
+  if (!openChest) return;
+  const cg = $('chestgrid'), ig = $('chestinv');
+  cg.innerHTML = ''; ig.innerHTML = '';
+  const cWrap = document.createElement('div');
+  cWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:580px;margin:0 auto';
+  for (let i = 0; i < 27; i++) cWrap.appendChild(chestSlotEl(openChest.slots, i, invSlots));
+  cg.appendChild(cWrap);
+  const iWrap = document.createElement('div');
+  iWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:580px;margin:0 auto';
+  for (let i = 0; i < INV_SIZE; i++) iWrap.appendChild(chestSlotEl(invSlots, i, openChest.slots));
+  ig.appendChild(iWrap);
+  updateChestGhost();
+}
+function updateChestGhost() {
+  const g = $('cursorItem');
+  if (!cursorStack) { g.style.display = 'none'; return; }
+  g.style.display = 'block';
+  const ctx = g.firstElementChild.getContext('2d');
+  ctx.clearRect(0, 0, 44, 44);
+  drawItemIcon(ctx, cursorStack.id, 22, 22, 11);
+  g.lastElementChild.textContent = cursorStack.n > 1 ? cursorStack.n : '';
+}
+$('chestov').addEventListener('mousemove', e => {
+  const g = $('cursorItem');
+  g.style.left = e.clientX + 'px';
+  g.style.top = e.clientY + 'px';
+});
+function breakChest(x, y, z) { // 부순 사람이 내용물을 받음
+  if (net.ready) net.send({ t: 'cbreak', x, y, z });
+  else {
+    const k = chestKeyOf(x, y, z);
+    const s = localChests.get(k);
+    localChests.delete(k);
+    if (s) for (const v of s) if (v) spawnDrop(x + 0.5, y + 0.4, z + 0.5, v.id, v.n);
+  }
+  if (openChest && openChest.x === x && openChest.y === y && openChest.z === z) closeChest();
+}
 
 // ── 침대 & 수면 ──
 let sleeping = false, spawnPt = null;
@@ -1494,10 +1665,11 @@ function checkAllAsleep() {
 }
 
 function doPlace() {
-  // 침대를 우클릭하면 상호작용
-  if (survival) {
+  // 침대·상자를 우클릭하면 상호작용
+  {
     const bHit = raycast();
-    if (bHit && bHit.b === B.bed) { bedInteract(bHit); return; }
+    if (bHit && bHit.b === B.chest) { openChestAt(bHit.x, bHit.y, bHit.z); return; }
+    if (survival && bHit && bHit.b === B.bed) { bedInteract(bHit); return; }
   }
   // 음식이면 먹기
   const heldS = heldItem();
@@ -1890,7 +2062,7 @@ function ensureMob(i, type = 0) {
   m = { i, type, hp: MOB_DEF[type].hp, mesh,
         sim: { x: 0, y: -50, z: 0, vx: 0, vy: 0, vz: 0, onG: false },
         tp: new THREE.Vector3(0, -50, 0), tyaw: 0, swing: 0, groanCd: 0,
-        wanderT: 0, wdir: 0, wspd: 0, fleeT: 0, fuse: 0, fusing: false };
+        wanderT: 0, wdir: 0, wspd: 0, fleeT: 0, fuse: 0, fusing: false, steerT: 0, steerDir: 1 };
   mobs.set(i, m);
   return m;
 }
@@ -1940,6 +2112,24 @@ function spawnMob(type) {
     return;
   }
 }
+function spawnCaveMob(p) { // 지하 공기 주머니를 찾아 좀비/크리퍼 스폰
+  for (let tries = 0; tries < 12; tries++) {
+    const ang = Math.random() * 6.28, dist = 9 + Math.random() * 12;
+    const x = Math.floor(p.x + Math.cos(ang) * dist), z = Math.floor(p.z + Math.sin(ang) * dist);
+    if (x < 2 || z < 2 || x >= WSIZE - 2 || z >= WSIZE - 2) continue;
+    for (let dy = -6; dy <= 5; dy++) {
+      const y = Math.floor(p.y) + dy;
+      if (y < 2 || y >= WH - 1) continue;
+      if (getB(x, y, z) === 0 && getB(x, y + 1, z) === 0 && BLOCKS[getB(x, y - 1, z)].solid) {
+        if (Math.hypot(p.x - x, p.z - z) < 7) break;
+        const m = ensureMob(mobSeq++, Math.random() < 0.8 ? 0 : 3);
+        m.sim.x = x + 0.5; m.sim.y = y; m.sim.z = z + 0.5;
+        m.tp.set(m.sim.x, m.sim.y, m.sim.z);
+        return;
+      }
+    }
+  }
+}
 function mobMoveAxis(s, axis, d) {
   if (d === 0) return;
   s[axis] += d;
@@ -1970,8 +2160,17 @@ function hostSimMobs(dt) {
     mobSpawnT = 3 + Math.random() * 4;
     const hostiles = [...mobs.values()].filter(m => m.type === 0 || m.type === 3).length;
     const animals = mobs.size - hostiles;
-    if (night && hostiles < Math.min(8, 2 + 2 * (remotes.size + 1))) spawnMob(Math.random() < 0.7 ? 0 : 3);
+    const hCap = Math.min(8, 2 + 2 * (remotes.size + 1));
+    if (night && hostiles < hCap) spawnMob(Math.random() < 0.7 ? 0 : 3);
     else if (!night && animals < 6) spawnMob(Math.random() < 0.5 ? 1 : 2);
+    // 지하(동굴)에 있는 플레이어 근처엔 낮에도 몹이 나옴
+    if (hostiles < hCap && Math.random() < 0.5) {
+      const caver = players.find(p => {
+        const hx = Math.floor(p.x), hz = Math.floor(p.z);
+        return hx >= 0 && hz >= 0 && hx < WSIZE && hz < WSIZE && p.y < heightAt(hx, hz) - 6;
+      });
+      if (caver) spawnCaveMob(caver);
+    }
   }
   for (const [i, m] of [...mobs.entries()]) {
     const s = m.sim;
@@ -1994,6 +2193,15 @@ function hostSimMobs(dt) {
       const dx = t.x - s.x, dz = t.z - s.z, dl = Math.hypot(dx, dz) || 1;
       mvx = dx / dl; mvz = dz / dl; spd = m.type === 3 ? 2.5 : 2.2;
       faceDx = dx; faceDz = dz;
+      // 벽에 막히면 잠시 옆으로 돌아감
+      if (m.steerT > 0) {
+        m.steerT -= dt;
+        const px2 = -mvz * m.steerDir, pz2 = mvx * m.steerDir;
+        mvx = mvx * 0.3 + px2 * 0.95;
+        mvz = mvz * 0.3 + pz2 * 0.95;
+        const l2 = Math.hypot(mvx, mvz) || 1;
+        mvx /= l2; mvz /= l2;
+      }
       // 크리퍼: 가까우면 점화 → 폭발
       if (m.type === 3) {
         if (best < 6.25) { m.fuse += dt; spd = 0; }
@@ -2030,7 +2238,13 @@ function hostSimMobs(dt) {
     mobMoveAxis(s, 'y', s.vy * dt);
     const hitX = mobMoveAxis(s, 'x', s.vx * dt);
     const hitZ = mobMoveAxis(s, 'z', s.vz * dt);
-    if ((hitX || hitZ) && (wasG || s.onG)) s.vy = 8.2; // 막히면 점프
+    if ((hitX || hitZ) && (wasG || s.onG)) {
+      s.vy = 8.2; // 막히면 점프
+      if ((m.type === 0 || m.type === 3) && m.steerT <= 0) { // 그래도 안 되면 우회
+        m.steerT = 0.9;
+        m.steerDir = Math.random() < 0.5 ? 1 : -1;
+      }
+    }
     if (s.y < -20) { killMob(i, false); continue; }
     m.tp.set(s.x, s.y, s.z);
     if (spd > 0.1) m.tyaw = Math.atan2(faceDx, faceDz);
@@ -2100,12 +2314,17 @@ function tryAttackMob() {
     }
   }
   if (!bestM) return false;
+  const nowS = performance.now() / 1000;
+  if (nowS < atkCdUntil) return true; // 쿨다운 중엔 헛스윙
+  atkCdUntil = nowS + 0.5;
   snd.swing();
   swingHand();
   const dir = rc.direction;
   const d = swordDmg(), kx = dir.x * 7, kz = dir.z * 7;
   if (isHost()) applyMobHit(bestM.i, d, kx, kz);
   else net.send({ t: 'mobhit', i: bestM.i, d, kx, kz });
+  const held = heldItem();
+  if (held && ITEMS[held.id] && ITEMS[held.id].dmg) damageHeldTool(); // 검 내구도
   return true;
 }
 function updateMobs(dt) {
@@ -2162,6 +2381,43 @@ const net = {
   serverOff: 0, t0: Date.now(),
   send(o) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(o)); },
 };
+function playerUid() { // 기기별 고유 id — 인벤토리 저장 키
+  let u = localStorage.getItem('mc-uid');
+  if (!u) {
+    u = 'u-' + Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem('mc-uid', u);
+  }
+  return u;
+}
+function savePlayer() {
+  if (!survival || !worldReady || !net.ready || dead) return;
+  net.send({ t: 'save', d: {
+    inv: invSlots, hp: +hp.toFixed(1), hu: hunger,
+    pos: [+pos.x.toFixed(1), +pos.y.toFixed(1), +pos.z.toFixed(1)],
+    sp: spawnPt,
+  } });
+}
+setInterval(savePlayer, 10000);
+addEventListener('beforeunload', savePlayer);
+function restorePlayer(d) {
+  if (!d || typeof d !== 'object') return false;
+  if (Array.isArray(d.inv) && d.inv.length === INV_SIZE) {
+    d.inv.forEach((v, i) => {
+      if (v && typeof v === 'object' && (v.id | 0) > 0 && (v.n | 0) > 0) {
+        const s = { id: v.id | 0, n: Math.min(64, v.n | 0) };
+        if (Number.isFinite(v.d)) s.d = v.d | 0;
+        invSlots[i] = s;
+      } else invSlots[i] = null;
+    });
+  }
+  if (Number.isFinite(d.hp)) hp = Math.max(1, Math.min(10, d.hp));
+  if (Number.isFinite(d.hu)) hunger = Math.max(0, Math.min(10, d.hu));
+  if (Array.isArray(d.sp) && d.sp.length === 3) spawnPt = d.sp;
+  if (Array.isArray(d.pos) && d.pos.length === 3 && Number.isFinite(d.pos[0])) {
+    return { pos: d.pos };
+  }
+  return true;
+}
 let worldReady = false, offline = false;
 
 function wsURL(room) {
@@ -2175,7 +2431,7 @@ function connect(room, name) {
     let ws;
     try { ws = new WebSocket(wsURL(room)); } catch (e) { fail(); return; }
     const timer = setTimeout(() => { try { ws.close(); } catch(e){} fail(); }, 8000);
-    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, mode: chosenMode }));
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, mode: chosenMode, uid: playerUid() }));
     ws.onerror = fail;
     ws.onclose = () => { if (!settled) fail(); else if (net.ready) onDisconnect(); };
     ws.onmessage = e => {
@@ -2235,6 +2491,16 @@ function handleMsg(m) {
     sysMsg('☀️ 아침이 밝았습니다!');
   } else if (m.t === 'boom') {
     boomAt(m.x, m.y, m.z);
+  } else if (m.t === 'chest') {
+    if (pendingChest && pendingChest.x === m.x && pendingChest.y === m.y && pendingChest.z === m.z) {
+      pendingChest = null;
+      showChest(m.x, m.y, m.z, m.s);
+    } else if (openChest && openChest.x === m.x && openChest.y === m.y && openChest.z === m.z) {
+      openChest.slots = m.s;
+      buildChestUI();
+    }
+  } else if (m.t === 'spill') {
+    for (const [id, n] of m.items) spawnDrop(m.x + 0.5, m.y + 0.4, m.z + 0.5, id, n);
   } else if (m.t === 'host') {
     const wasHost = isHost();
     hostId = m.id;
@@ -2378,13 +2644,22 @@ function drawItemIcon(ctx, id, cx0, cy0, S) {
   if (id < 100) drawBlockIcon(ctx, id, cx0, cy0, S);
   else { ctx.imageSmoothingEnabled = false; ctx.drawImage(itemCanvas(id), cx0 - S, cy0 - S, S * 2, S * 2); }
 }
+function drawStack(ctx, s, cx0, cy0, S) { // 아이콘 + 내구도 바
+  drawItemIcon(ctx, s.id, cx0, cy0, S);
+  if (s.d != null && ITEMS[s.id] && ITEMS[s.id].dur && s.d < ITEMS[s.id].dur) {
+    const frac = Math.max(0, s.d / ITEMS[s.id].dur);
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(cx0 - S, cy0 + S - 4, S * 2, 3);
+    ctx.fillStyle = frac > 0.5 ? '#5ad25a' : frac > 0.25 ? '#e8c84a' : '#e85a4a';
+    ctx.fillRect(cx0 - S, cy0 + S - 4, S * 2 * frac, 3);
+  }
+}
 function drawHand() {
   const c = $('handcv');
   if (!c) return;
   const g = c.getContext('2d');
   g.clearRect(0, 0, 150, 150);
   const s = invSlots[selSlot];
-  if (s) drawItemIcon(g, s.id, 75, 78, 36);
+  if (s) drawStack(g, s, 75, 78, 36);
 }
 function swingHand() {
   const h = $('hand');
@@ -2401,7 +2676,7 @@ function drawHotbar() {
     const d = document.createElement('div');
     d.className = 'slot' + (i === selSlot ? ' sel' : '');
     const c = document.createElement('canvas'); c.width = c.height = 52;
-    if (s) drawItemIcon(c.getContext('2d'), s.id, 26, 26, 13);
+    if (s) drawStack(c.getContext('2d'), s, 26, 26, 13);
     const num = document.createElement('span'); num.className = 'num'; num.textContent = i + 1;
     d.appendChild(c); d.appendChild(num);
     if (survival && s && s.n > 1) {
@@ -2475,7 +2750,7 @@ function buildInv() {
     const d = document.createElement('div');
     d.className = 'invslot' + (idx === selSlot ? ' isel' : '');
     const c = document.createElement('canvas'); c.width = c.height = 56;
-    if (s) drawItemIcon(c.getContext('2d'), s.id, 28, 28, 14);
+    if (s) drawStack(c.getContext('2d'), s, 28, 28, 14);
     d.appendChild(c);
     if (s && s.n > 1) {
       const cnt = document.createElement('span'); cnt.className = 'cnt'; cnt.textContent = s.n;
@@ -2566,12 +2841,12 @@ let holdL = false, holdR = false, holdTimerL = 0, holdTimerR = 0;
 const canvas = renderer.domElement;
 canvas.addEventListener('click', () => {
   initAudio();
-  if (playing && !locked && !invOpen && !chatOpen) canvas.requestPointerLock();
+  if (playing && !locked && !invOpen && !chatOpen && !chestOpen) canvas.requestPointerLock();
 });
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
   if (!locked) { holdL = holdR = false; stopMining(); }
-  if (!locked && playing && !invOpen && !chatOpen && !dead) showPause(true);
+  if (!locked && playing && !invOpen && !chatOpen && !chestOpen && !dead) showPause(true);
 });
 document.addEventListener('mousemove', e => {
   if (!locked) return;
@@ -2624,7 +2899,7 @@ document.addEventListener('keydown', e => {
     if (now - lastWTap < 260) sprintLatch = true; // W 두 번 = 질주
     lastWTap = now;
   }
-  if (e.code === 'KeyE') { if (invOpen) closeInv(); else if (locked) openInv(); }
+  if (e.code === 'KeyE') { if (chestOpen) closeChest(); else if (invOpen) closeInv(); else if (locked) openInv(); }
   if ((e.code === 'KeyT' || e.code === 'Enter') && locked) { openChat(); e.preventDefault(); }
   if (e.code === 'Tab') $('plist').style.display = 'block';
   if (e.code === 'F3') showDebug = !showDebug;
@@ -2802,9 +3077,16 @@ async function startGame() {
   }
   bar.style.width = '100%';
 
-  // 5) 스폰
-  const s = findSpawn();
-  pos.set(s[0], s[1] + 0.5, s[2]);
+  // 5) 스폰 (저장된 위치가 있으면 이어서)
+  let restored = null;
+  if (survival && init && init.pdata) restored = restorePlayer(init.pdata);
+  if (restored && restored.pos) {
+    pos.set(restored.pos[0], restored.pos[1] + 0.2, restored.pos[2]);
+    sysMsg('💾 저장된 데이터를 불러왔습니다');
+  } else {
+    const s = findSpawn();
+    pos.set(s[0], s[1] + 0.5, s[2]);
+  }
   camera.rotation.set(0, Math.PI * 0.25, 0);
 
   if (init) for (const p of init.players) addRemote(p.id, p.name, p.p);
@@ -2834,7 +3116,7 @@ function frame(now) {
   fpsN++; fpsT += dt;
   if (fpsT >= 0.5) { fps = Math.round(fpsN / fpsT); fpsN = 0; fpsT = 0; }
 
-  if (locked && !invOpen && !chatOpen && !dead) {
+  if (locked && !invOpen && !chatOpen && !chestOpen && !dead) {
     phyAcc = Math.min(0.15, phyAcc + dt);
     while (phyAcc >= 1 / 60) { stepPhysics(1 / 60); phyAcc -= 1 / 60; }
     updateHolds(dt);
