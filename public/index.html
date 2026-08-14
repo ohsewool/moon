@@ -297,7 +297,8 @@ const $ = id => document.getElementById(id);
 // ═════════════════ 블록 정의 ═════════════════
 // tiles: [윗면, 옆면, 아랫면] 아틀라스 타일 번호
 const B = { air:0, grass:1, dirt:2, stone:3, cobble:4, sand:5, log:6, leaves:7, planks:8,
-            glass:9, brick:10, snow:11, water:12, glow:13, flower_r:14, flower_y:15, tgrass:16, bedrock:17 };
+            glass:9, brick:10, snow:11, water:12, glow:13, flower_r:14, flower_y:15, tgrass:16, bedrock:17,
+            coalore:18, ironore:19, diaore:20, furnace:21 };
 // hard: 채굴 시간(초). pick:true = 곡괭이 필요(맨손이면 5.5배 느리고 드롭 없음)
 // dropTo: 부쉈을 때 나오는 아이템 (없으면 자기 자신, null이면 아무것도 안 나옴)
 const BLOCKS = [
@@ -319,15 +320,32 @@ const BLOCKS = [
   { name:'노란 꽃',  kind:'cross',  solid:false, occl:false, tiles:[16,16,16], inv:true, hard:0.05 },
   { name:'수풀',     kind:'cross',  solid:false, occl:false, tiles:[17,17,17], inv:true, hard:0.05, dropTo:null },
   { name:'기반암',   kind:'solid',  solid:true,  occl:true,  tiles:[18,18,18] },
+  { name:'석탄 광석',   kind:'solid', solid:true, occl:true, tiles:[19,19,19], inv:true, hard:1.6, pick:true, minTier:1, dropTo:105 },
+  { name:'철 광석',     kind:'solid', solid:true, occl:true, tiles:[20,20,20], inv:true, hard:1.7, pick:true, minTier:2, dropTo:106 },
+  { name:'다이아 광석', kind:'solid', solid:true, occl:true, tiles:[21,21,21], inv:true, hard:1.9, pick:true, minTier:3, dropTo:108 },
+  { name:'화로',        kind:'solid', solid:true, occl:true, tiles:[4,22,4],   inv:true, hard:1.7, pick:true },
 ];
 
-// ── 도구 아이템 (id 100+) ──
+// ── 도구·재료·음식 아이템 (id 100+) ──
 const ITEMS = {
   100: { name: '막대' },
   101: { name: '나무 곡괭이', pickTier: 1 },
   102: { name: '돌 곡괭이',   pickTier: 2 },
   103: { name: '나무 검',     dmg: 3 },
   104: { name: '돌 검',       dmg: 4 },
+  105: { name: '석탄' },
+  106: { name: '철 원석' },
+  107: { name: '철 주괴' },
+  108: { name: '다이아몬드' },
+  109: { name: '철 곡괭이',     pickTier: 3 },
+  110: { name: '철 검',         dmg: 5 },
+  111: { name: '다이아 곡괭이', pickTier: 4 },
+  112: { name: '다이아 검',     dmg: 7 },
+  113: { name: '생돼지고기',   food: 2 },
+  114: { name: '익힌 돼지고기', food: 4 },
+  115: { name: '생소고기',     food: 2 },
+  116: { name: '스테이크',     food: 5 },
+  117: { name: '사과',         food: 2 },
 };
 function itemName(id) { return id >= 100 ? ITEMS[id].name : BLOCKS[id].name; }
 
@@ -345,29 +363,81 @@ function itemCanvas(id) {
     for (let i = 0; i < 8; i++) g.fillRect(3 + i, 12 - i, 2, 2);
     g.fillStyle = head;
     g.fillRect(4, 2, 9, 2); g.fillRect(2, 3, 3, 3); g.fillRect(12, 3, 3, 3); g.fillRect(2, 6, 2, 2); g.fillRect(13, 6, 2, 2);
-  } else if (id === 103 || id === 104) { // 검
-    const blade = id === 103 ? '#c9a15e' : '#b8b8b8';
+  } else if (id === 103 || id === 104 || id === 110 || id === 112) { // 검
+    const blade = id === 103 ? '#c9a15e' : id === 104 ? '#b8b8b8' : id === 110 ? '#e8e8e8' : '#5ee8e0';
     g.fillStyle = blade;
     for (let i = 0; i < 8; i++) g.fillRect(5 + i, 9 - i, 2, 2);
-    g.fillStyle = '#e8e0d0'; g.fillRect(12, 2, 1, 1);
+    g.fillStyle = '#ffffff'; g.fillRect(12, 2, 1, 1);
     g.fillStyle = darkWood; g.fillRect(4, 9, 3, 2); g.fillRect(3, 12, 2, 2); g.fillRect(2, 13, 2, 2);
+  } else if (id === 109 || id === 111) { // 상위 곡괭이
+    const head = id === 109 ? '#e0e0e0' : '#5ee8e0';
+    g.fillStyle = wood;
+    for (let i = 0; i < 8; i++) g.fillRect(3 + i, 12 - i, 2, 2);
+    g.fillStyle = head;
+    g.fillRect(4, 2, 9, 2); g.fillRect(2, 3, 3, 3); g.fillRect(12, 3, 3, 3); g.fillRect(2, 6, 2, 2); g.fillRect(13, 6, 2, 2);
+  } else if (id === 105) { // 석탄
+    g.fillStyle = '#1c1c1c'; g.fillRect(4, 5, 8, 7);
+    g.fillStyle = '#333'; g.fillRect(5, 4, 6, 2); g.fillRect(3, 7, 2, 4);
+    g.fillStyle = '#4a4a4a'; g.fillRect(6, 6, 2, 2);
+  } else if (id === 106) { // 철 원석
+    g.fillStyle = '#8a7a6a'; g.fillRect(4, 5, 8, 7);
+    g.fillStyle = '#d8af93'; g.fillRect(5, 6, 3, 3); g.fillRect(9, 8, 2, 2);
+    g.fillStyle = '#b58868'; g.fillRect(6, 4, 4, 2);
+  } else if (id === 107) { // 철 주괴
+    g.fillStyle = '#c8c8c8'; g.fillRect(3, 7, 10, 5);
+    g.fillStyle = '#e8e8e8'; g.fillRect(4, 6, 9, 2);
+    g.fillStyle = '#9a9a9a'; g.fillRect(3, 11, 10, 1);
+  } else if (id === 108) { // 다이아몬드
+    g.fillStyle = '#4fd8d8'; g.fillRect(6, 4, 4, 2); g.fillRect(4, 6, 8, 3); g.fillRect(6, 9, 4, 3);
+    g.fillStyle = '#8ef4ef'; g.fillRect(6, 5, 2, 3);
+    g.fillStyle = '#2aa8a8'; g.fillRect(10, 7, 2, 3);
+  } else if (id === 113 || id === 115) { // 생고기
+    g.fillStyle = id === 113 ? '#f0a0a8' : '#c84a48';
+    g.fillRect(3, 5, 10, 7);
+    g.fillStyle = id === 113 ? '#f8c8cc' : '#e87a78'; g.fillRect(4, 6, 4, 3);
+    g.fillStyle = '#fff'; g.fillRect(10, 6, 2, 5);
+  } else if (id === 114 || id === 116) { // 익힌 고기
+    g.fillStyle = '#9a6a3a'; g.fillRect(3, 5, 10, 7);
+    g.fillStyle = '#b8845a'; g.fillRect(4, 6, 5, 3);
+    g.fillStyle = '#7a4e28'; g.fillRect(9, 9, 3, 2);
+  } else if (id === 117) { // 사과
+    g.fillStyle = '#d5433c'; g.fillRect(5, 6, 6, 6); g.fillRect(4, 7, 8, 4);
+    g.fillStyle = '#f47a70'; g.fillRect(6, 7, 2, 2);
+    g.fillStyle = '#5e402a'; g.fillRect(7, 4, 2, 2);
+    g.fillStyle = '#4e9032'; g.fillRect(9, 4, 2, 1);
   }
   itemCanvasCache.set(id, c);
   return c;
 }
 
-// ── 제작법 ──
+// ── 제작법 (furnace:true = 화로 근처에서만 제작 가능) ──
 const RECIPES = [
-  { out: [8, 4],   ins: [[6, 1]] },            // 원목1 → 판자4
-  { out: [100, 4], ins: [[8, 2]] },            // 판자2 → 막대4
-  { out: [101, 1], ins: [[8, 3], [100, 2]] },  // 나무 곡괭이
-  { out: [102, 1], ins: [[4, 3], [100, 2]] },  // 돌 곡괭이
-  { out: [103, 1], ins: [[8, 2], [100, 1]] },  // 나무 검
-  { out: [104, 1], ins: [[4, 2], [100, 1]] },  // 돌 검
-  { out: [9, 1],   ins: [[5, 1]] },            // 모래1 → 유리1
-  { out: [10, 1],  ins: [[4, 2]] },            // 조약돌2 → 벽돌1
-  { out: [13, 1],  ins: [[9, 1], [15, 1]] },   // 유리+노란꽃 → 발광석
+  { out: [8, 4],   ins: [[6, 1]] },                          // 원목1 → 판자4
+  { out: [100, 4], ins: [[8, 2]] },                          // 판자2 → 막대4
+  { out: [101, 1], ins: [[8, 3], [100, 2]] },                // 나무 곡괭이
+  { out: [102, 1], ins: [[4, 3], [100, 2]] },                // 돌 곡괭이
+  { out: [103, 1], ins: [[8, 2], [100, 1]] },                // 나무 검
+  { out: [104, 1], ins: [[4, 2], [100, 1]] },                // 돌 검
+  { out: [B.furnace, 1], ins: [[4, 8]] },                    // 조약돌8 → 화로
+  { out: [109, 1], ins: [[107, 3], [100, 2]] },              // 철 곡괭이
+  { out: [110, 1], ins: [[107, 2], [100, 1]] },              // 철 검
+  { out: [111, 1], ins: [[108, 3], [100, 2]] },              // 다이아 곡괭이
+  { out: [112, 1], ins: [[108, 2], [100, 1]] },              // 다이아 검
+  { out: [13, 1],  ins: [[9, 1], [15, 1]] },                 // 유리+노란꽃 → 발광석
+  { out: [107, 2], ins: [[106, 2], [105, 1]], furnace: true }, // 철 제련
+  { out: [9, 2],   ins: [[5, 2], [105, 1]],   furnace: true }, // 유리 굽기
+  { out: [3, 2],   ins: [[4, 2], [105, 1]],   furnace: true }, // 돌 굽기
+  { out: [10, 2],  ins: [[4, 2], [105, 1]],   furnace: true }, // 벽돌 굽기
+  { out: [114, 2], ins: [[113, 2], [105, 1]], furnace: true }, // 돼지고기 굽기
+  { out: [116, 2], ins: [[115, 2], [105, 1]], furnace: true }, // 스테이크
 ];
+function nearFurnace() {
+  const px = Math.floor(pos.x), py = Math.floor(pos.y + 1), pz = Math.floor(pos.z);
+  for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) for (let dz = -3; dz <= 3; dz++) {
+    if (getB(px + dx, py + dy, pz + dz) === B.furnace) return true;
+  }
+  return false;
+}
 
 // ═════════════════ 텍스처 아틀라스 (절차 생성 픽셀아트) ═════════════════
 const atlasCanvas = document.createElement('canvas');
@@ -503,6 +573,41 @@ tile(17, c => {
 });
 // 18 기반암
 tile(18, c => fillNoise(c, '#4a4a4a', ['#333333','#5a5a5a','#222222','#666666'], 180));
+// 19 석탄 광석
+tile(19, c => {
+  fillNoise(c, '#8d8d8d', ['#828282','#989898','#777777'], 100);
+  for (let i = 0; i < 6; i++) {
+    const x = (tr()*13)|0, y = (tr()*13)|0;
+    c.fillStyle = '#1c1c1c'; c.fillRect(x, y, 2, 2);
+    c.fillStyle = '#333'; c.fillRect(x+1, y+1, 2, 2);
+  }
+});
+// 20 철 광석
+tile(20, c => {
+  fillNoise(c, '#8d8d8d', ['#828282','#989898','#777777'], 100);
+  for (let i = 0; i < 6; i++) {
+    const x = (tr()*13)|0, y = (tr()*13)|0;
+    c.fillStyle = '#d8af93'; c.fillRect(x, y, 2, 2);
+    c.fillStyle = '#b58868'; c.fillRect(x+1, y+1, 2, 2);
+  }
+});
+// 21 다이아몬드 광석
+tile(21, c => {
+  fillNoise(c, '#8d8d8d', ['#828282','#989898','#777777'], 100);
+  for (let i = 0; i < 5; i++) {
+    const x = (tr()*13)|0, y = (tr()*13)|0;
+    c.fillStyle = '#4fd8d8'; c.fillRect(x, y, 2, 2);
+    c.fillStyle = '#8ef4ef'; c.fillRect(x+1, y, 1, 1);
+  }
+});
+// 22 화로 (정면)
+tile(22, c => {
+  fillNoise(c, '#7d7d7d', ['#8a8a8a','#6e6e6e','#909090'], 110);
+  c.fillStyle = '#3a3a3a'; c.fillRect(3, 8, 10, 6);
+  c.fillStyle = '#e8843c'; c.fillRect(4, 9, 8, 4);
+  c.fillStyle = '#ffd24a'; c.fillRect(5, 10, 3, 2); c.fillRect(9, 11, 2, 1);
+  c.fillStyle = '#4a4a4a'; c.fillRect(3, 2, 10, 3);
+});
 
 const atlasTex = new THREE.CanvasTexture(atlasCanvas);
 atlasTex.magFilter = THREE.NearestFilter;
@@ -551,6 +656,15 @@ function heightAt(x, z) {
   hCache.set(k, h);
   return h;
 }
+// 광석 분포 — 2×2×2 덩어리(광맥) 단위로 배치, 깊을수록 귀한 광물
+function oreOrStone(x, y, z) {
+  const cx2 = x >> 1, cy2 = y >> 1, cz2 = z >> 1;
+  if (y < 13 && h2(cx2 * 3 + cy2, cz2 * 5 + cy2 * 7, seed ^ 0xd1a) < 0.030) return B.diaore;
+  if (y < 30 && h2(cx2 * 7 + cy2 * 3, cz2 * 11 + cy2, seed ^ 0x1207) < 0.055) return B.ironore;
+  if (y < 44 && h2(cx2 * 13 + cy2 * 5, cz2 * 3 + cy2 * 9, seed ^ 0xc0a1) < 0.085) return B.coalore;
+  return B.stone;
+}
+
 function treeAt(x, z) {
   if (x < 2 || z < 2 || x > WSIZE - 3 || z > WSIZE - 3) return 0;
   const h = heightAt(x, z);
@@ -591,7 +705,7 @@ function genChunk(cx, cz) {
     for (let y = 0; y < h; y++) {
       let b;
       if (y === 0) b = B.bedrock;
-      else if (y < h - 3) b = B.stone;
+      else if (y < h - 3) b = oreOrStone(x, y, z);
       else if (sandy) b = B.sand;
       else if (y === h - 1) b = snowy ? B.snow : B.grass;
       else b = B.dirt;
@@ -886,6 +1000,9 @@ const snd = {
   craft: () => { tone(520, 0.08, 'triangle', 0.12); setTimeout(() => tone(780, 0.1, 'triangle', 0.12), 80); },
   zomb: () => tone(85 + Math.random() * 40, 0.5, 'sawtooth', 0.06, -30),
   swing: () => noiseS(0.06, 0.08),
+  eat: () => { noiseS(0.08, 0.12); setTimeout(() => noiseS(0.08, 0.12), 180); setTimeout(() => noiseS(0.08, 0.1), 360); },
+  oink: () => tone(300 + Math.random() * 100, 0.15, 'square', 0.05, 120),
+  moo: () => tone(140 + Math.random() * 30, 0.6, 'sawtooth', 0.06, -50),
 };
 
 // ═════════════════ 플레이어 물리 ═════════════════
@@ -1030,8 +1147,9 @@ let selSlot = 0;
 
 // ── 서바이벌 상태 ──
 let survival = false, hostId = null;
-let hp = 10, airLv = 10, dead = false;
+let hp = 10, airLv = 10, hunger = 10, dead = false;
 let lastDmgT = -99, regenAcc = 0, drownAcc = 0, fallPeak = 0, lastMobHurt = 0;
+let hungerAcc = 0, starveAcc = 0, eatCd = 0;
 const invCount = new Map(); // 아이템 id → 개수
 
 function countOf(id) { return invCount.get(id) || 0; }
@@ -1059,18 +1177,20 @@ function swordDmg() {
   if (id >= 100 && ITEMS[id] && ITEMS[id].dmg && countOf(id) > 0) return ITEMS[id].dmg;
   return 1;
 }
+const TIER_SPEED = { 1: 1, 2: 0.55, 3: 0.38, 4: 0.28 };
 function mineTime(b) {
   const bl = BLOCKS[b];
   let t = bl.hard != null ? bl.hard : 1;
   if (bl.pick) {
-    const tier = pickTier();
-    t = tier === 0 ? t * 5.5 : tier === 1 ? t : t * 0.55;
+    const tier = pickTier(), need = bl.minTier || 1;
+    t = tier < need ? t * 5.5 : t * TIER_SPEED[tier];
   }
   return t;
 }
 function dropOf(b) {
   const bl = BLOCKS[b];
-  if (bl.pick && pickTier() === 0) return null; // 곡괭이 없이 캐면 드롭 없음
+  if (bl.pick && pickTier() < (bl.minTier || 1)) return null; // 등급 부족 → 드롭 없음
+  if (b === B.leaves) return Math.random() < 0.08 ? 117 : null; // 나뭇잎 → 가끔 사과
   return bl.dropTo === undefined ? b : bl.dropTo;
 }
 
@@ -1098,7 +1218,7 @@ function respawn() {
   const s = findSpawn();
   pos.set(s[0], s[1] + 0.5, s[2]);
   vel.set(0, 0, 0);
-  hp = 10; airLv = 10; dead = false; fallPeak = pos.y;
+  hp = 10; airLv = 10; hunger = 10; dead = false; fallPeak = pos.y;
   $('death').style.display = 'none';
   updateSurvivalHUD();
   canvas.requestPointerLock();
@@ -1106,7 +1226,10 @@ function respawn() {
 function updateSurvivalHUD() {
   if (!survival) { $('hearts').style.display = 'none'; $('airbar').textContent = ''; return; }
   $('hearts').style.display = 'block';
-  $('hearts').textContent = '❤️'.repeat(hp) + '🖤'.repeat(Math.max(0, 10 - hp));
+  $('hearts').textContent =
+    '❤️'.repeat(hp) + '🖤'.repeat(Math.max(0, 10 - hp)) +
+    ' ' +
+    '🍗'.repeat(Math.max(0, Math.ceil(hunger))) + '▫'.repeat(Math.max(0, 10 - Math.ceil(hunger)));
   $('airbar').textContent = airLv < 10 ? '💧'.repeat(Math.max(0, Math.ceil(airLv))) : '';
 }
 
@@ -1152,6 +1275,18 @@ function tickMining(dt) {
 function stopMining() { mining = null; $('mineprog').style.display = 'none'; }
 
 function doPlace() {
+  // 음식이면 먹기
+  const held = hotbar[selSlot];
+  if (survival && held >= 100 && ITEMS[held] && ITEMS[held].food && countOf(held) > 0) {
+    const nowS = performance.now() / 1000;
+    if (nowS < eatCd || hunger >= 10) return;
+    eatCd = nowS + 0.9;
+    takeItem(held, 1);
+    hunger = Math.min(10, hunger + ITEMS[held].food);
+    snd.eat();
+    updateSurvivalHUD();
+    return;
+  }
   const hit = raycast();
   if (!hit) return;
   const { px, py, pz } = hit;
@@ -1402,21 +1537,69 @@ function makeZombieMesh() {
   g.rotation.order = 'YXZ';
   return { g, legL, legR };
 }
-function ensureMob(i) {
+// 몹 타입: 0 좀비, 1 돼지, 2 소
+const MOB_DEF = [
+  { hp: 8, color: '#5da54a', drop: null, hostile: true },
+  { hp: 6, color: '#f0a0b0', drop: 113, hostile: false }, // 돼지 → 생돼지고기
+  { hp: 8, color: '#7a5238', drop: 115, hostile: false }, // 소 → 생소고기
+];
+function makeAnimalMesh(type) {
+  const bodyCol = type === 1 ? 0xf0a0b0 : 0x7a5238;
+  const headCol = type === 1 ? 0xf4b4c0 : 0x8a6248;
+  const bodyMat = new THREE.MeshLambertMaterial({ color: bodyCol });
+  const headMat = new THREE.MeshLambertMaterial({ color: headCol });
+  const legMat = new THREE.MeshLambertMaterial({ color: type === 1 ? 0xe08a9a : 0x5e4028 });
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.55, 1.0), bodyMat);
+  body.position.y = 0.75;
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.4), headMat);
+  head.position.set(0, type === 1 ? 0.78 : 0.95, 0.62);
+  if (type === 1) { // 돼지 코
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.06), new THREE.MeshLambertMaterial({ color: 0xd87a8a }));
+    nose.position.set(0, -0.03, 0.23);
+    head.add(nose);
+  } else { // 소 뿔
+    for (const sx of [-0.16, 0.16]) {
+      const horn = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.07), new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }));
+      horn.position.set(sx, 0.26, 0.05);
+      head.add(horn);
+    }
+  }
+  const legs = [];
+  for (const [sx, sz] of [[-0.2, 0.32], [0.2, 0.32], [-0.2, -0.32], [0.2, -0.32]]) {
+    const grp = new THREE.Group();
+    grp.position.set(sx, 0.5, sz);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.16), legMat);
+    leg.position.y = -0.25;
+    grp.add(leg);
+    g.add(grp);
+    legs.push(grp);
+  }
+  g.add(body, head);
+  g.rotation.order = 'YXZ';
+  return { g, legL: legs[0], legR: legs[1], legs };
+}
+function ensureMob(i, type = 0) {
   let m = mobs.get(i);
   if (m) return m;
-  const mesh = makeZombieMesh();
+  const mesh = type === 0 ? makeZombieMesh() : makeAnimalMesh(type);
   scene.add(mesh.g);
-  m = { i, hp: 8, mesh,
+  m = { i, type, hp: MOB_DEF[type].hp, mesh,
         sim: { x: 0, y: -50, z: 0, vx: 0, vy: 0, vz: 0, onG: false },
-        tp: new THREE.Vector3(0, -50, 0), tyaw: 0, swing: 0, groanCd: 0 };
+        tp: new THREE.Vector3(0, -50, 0), tyaw: 0, swing: 0, groanCd: 0,
+        wanderT: 0, wdir: 0, wspd: 0, fleeT: 0 };
   mobs.set(i, m);
   return m;
 }
 function killMob(i, withFx) {
   const m = mobs.get(i);
   if (!m) return;
-  if (withFx) spawnBreakFx(m.tp.x, m.tp.y + 1, m.tp.z, '#5da54a');
+  if (withFx) {
+    spawnBreakFx(m.tp.x, m.tp.y + 1, m.tp.z, MOB_DEF[m.type].color);
+    // 동물은 고기 드롭 (각자 자기 화면에서 주울 수 있음)
+    const drop = MOB_DEF[m.type].drop;
+    if (drop && survival) spawnDrop(m.tp.x, m.tp.y + 0.6, m.tp.z, drop, 1 + (Math.random() < 0.4 ? 1 : 0));
+  }
   scene.remove(m.mesh.g);
   mobs.delete(i);
 }
@@ -1434,18 +1617,20 @@ function allPlayerPos() {
   for (const av of remotes.values()) if (av.tp.y > -40) list.push(av.tp);
   return list;
 }
-function spawnZombie() {
+function spawnMob(type) {
   const players = allPlayerPos();
   if (!players.length) return;
   const base = players[(Math.random() * players.length) | 0];
+  const minDist = type === 0 ? 18 : 12, spread = type === 0 ? 14 : 14, keepAway = type === 0 ? 10 : 6;
   for (let tries = 0; tries < 10; tries++) {
-    const ang = Math.random() * 6.28, dist = 18 + Math.random() * 14;
+    const ang = Math.random() * 6.28, dist = minDist + Math.random() * spread;
     const x = Math.floor(base.x + Math.cos(ang) * dist), z = Math.floor(base.z + Math.sin(ang) * dist);
     if (x < 2 || z < 2 || x >= WSIZE - 2 || z >= WSIZE - 2) continue;
     const gy = groundYAt(x, z);
     if (gy < 0) continue;
-    if (players.some(p => Math.hypot(p.x - x, p.z - z) < 10)) continue;
-    const m = ensureMob(mobSeq++);
+    if (type !== 0 && getB(x, gy - 1, z) !== B.grass) continue; // 동물은 잔디 위에만
+    if (players.some(p => Math.hypot(p.x - x, p.z - z) < keepAway)) continue;
+    const m = ensureMob(mobSeq++, type);
     m.sim.x = x + 0.5; m.sim.y = gy; m.sim.z = z + 0.5;
     m.tp.set(m.sim.x, m.sim.y, m.sim.z);
     return;
@@ -1475,31 +1660,53 @@ function hostSimMobs(dt) {
   const el = Math.sin(dayFrac() * Math.PI * 2);
   const night = el < -0.08;
   const players = allPlayerPos();
-  // 스폰 (밤에만)
+  // 스폰: 좀비는 밤, 동물은 낮
   mobSpawnT -= dt;
-  if (night && players.length && mobSpawnT <= 0 && mobs.size < Math.min(8, 2 + 2 * (remotes.size + 1))) {
+  if (players.length && mobSpawnT <= 0) {
     mobSpawnT = 3 + Math.random() * 4;
-    spawnZombie();
+    const zombies = [...mobs.values()].filter(m => m.type === 0).length;
+    const animals = mobs.size - zombies;
+    if (night && zombies < Math.min(8, 2 + 2 * (remotes.size + 1))) spawnMob(0);
+    else if (!night && animals < 6) spawnMob(Math.random() < 0.5 ? 1 : 2);
   }
   for (const [i, m] of [...mobs.entries()]) {
     const s = m.sim;
-    // 낮이 되면 불타 소멸
-    if (el > 0.05) {
+    // 좀비는 낮에 불탐
+    if (m.type === 0 && el > 0.05) {
       m.hp -= dt * 1.5;
       if (Math.random() < dt * 4) spawnBreakFx(s.x, s.y + 1.4, s.z, '#e8843c');
     }
     if (m.hp <= 0) { killMob(i, true); continue; }
-    // 가장 가까운 플레이어 추적
-    let t = null, best = 1e9;
-    for (const p of players) {
-      const d2 = (p.x - s.x) ** 2 + (p.z - s.z) ** 2;
-      if (d2 < best) { best = d2; t = p; }
+
+    let mvx = 0, mvz = 0, spd = 0, faceDx = 0, faceDz = 1;
+    if (m.type === 0) {
+      // 좀비: 가장 가까운 플레이어 추적
+      let t = null, best = 1e9;
+      for (const p of players) {
+        const d2 = (p.x - s.x) ** 2 + (p.z - s.z) ** 2;
+        if (d2 < best) { best = d2; t = p; }
+      }
+      if (!t || best > 3600) { killMob(i, false); continue; }
+      const dx = t.x - s.x, dz = t.z - s.z, dl = Math.hypot(dx, dz) || 1;
+      mvx = dx / dl; mvz = dz / dl; spd = 2.2;
+      faceDx = dx; faceDz = dz;
+    } else {
+      // 동물: 어슬렁거리기 + 맞으면 도망
+      m.wanderT -= dt;
+      m.fleeT = Math.max(0, m.fleeT - dt);
+      if (m.wanderT <= 0) {
+        m.wanderT = 1.5 + Math.random() * 3.5;
+        m.wdir = Math.random() * 6.28;
+        m.wspd = Math.random() < 0.45 ? 0 : 1;
+      }
+      const sp = m.fleeT > 0 ? 3.2 : m.wspd;
+      mvx = Math.sin(m.wdir); mvz = Math.cos(m.wdir); spd = sp;
+      faceDx = mvx; faceDz = mvz;
+      // 낭떠러지/물가에서 무한 이동 방지: 플레이어와 너무 멀면 정지
+      if (players.every(p => Math.hypot(p.x - s.x, p.z - s.z) > 70)) { killMob(i, false); continue; }
     }
-    if (!t || best > 3600) { killMob(i, false); continue; }
-    const dx = t.x - s.x, dz = t.z - s.z, dl = Math.hypot(dx, dz) || 1;
-    const spd = 2.2;
-    s.vx += ((dx / dl) * spd - s.vx) * Math.min(1, dt * 6);
-    s.vz += ((dz / dl) * spd - s.vz) * Math.min(1, dt * 6);
+    s.vx += (mvx * spd - s.vx) * Math.min(1, dt * 6);
+    s.vz += (mvz * spd - s.vz) * Math.min(1, dt * 6);
     s.vy -= 26 * dt;
     s.vy = Math.max(-30, s.vy);
     const wasG = s.onG;
@@ -1510,13 +1717,13 @@ function hostSimMobs(dt) {
     if ((hitX || hitZ) && (wasG || s.onG)) s.vy = 8.2; // 막히면 점프
     if (s.y < -20) { killMob(i, false); continue; }
     m.tp.set(s.x, s.y, s.z);
-    m.tyaw = Math.atan2(dx, dz);
+    if (spd > 0.1) m.tyaw = Math.atan2(faceDx, faceDz);
   }
   // 동기화 전송 (5Hz)
   mobSendT -= dt;
   if (mobSendT <= 0 && net.ready) {
     mobSendT = 0.2;
-    const l = [...mobs.values()].map(m => [m.i, +m.sim.x.toFixed(1), +m.sim.y.toFixed(1), +m.sim.z.toFixed(1), +m.tyaw.toFixed(2), +m.hp.toFixed(1)]);
+    const l = [...mobs.values()].map(m => [m.i, m.type, +m.sim.x.toFixed(1), +m.sim.y.toFixed(1), +m.sim.z.toFixed(1), +m.tyaw.toFixed(2), +m.hp.toFixed(1)]);
     net.send({ t: 'mobs', l });
   }
 }
@@ -1525,6 +1732,11 @@ function applyMobHit(i, d, kx, kz) {
   if (!m) return;
   m.hp -= d;
   m.sim.vx += kx; m.sim.vz += kz; m.sim.vy = 5;
+  if (m.type !== 0) { // 동물은 도망
+    m.fleeT = 5;
+    m.wdir = Math.atan2(kx, kz); // 맞은 방향으로 도망
+    m.wanderT = 5;
+  }
   spawnBreakFx(m.tp.x, m.tp.y + 1.2, m.tp.z, '#c84a3c');
   if (m.hp <= 0) killMob(i, true);
 }
@@ -1535,8 +1747,9 @@ function tryAttackMob() {
   let bestM = null, bestD = 3.6;
   const box = new THREE.Box3(), hitP = new THREE.Vector3();
   for (const m of mobs.values()) {
-    box.min.set(m.tp.x - 0.45, m.tp.y, m.tp.z - 0.45);
-    box.max.set(m.tp.x + 0.45, m.tp.y + 1.9, m.tp.z + 0.45);
+    const hw = m.type === 0 ? 0.45 : 0.6, hh = m.type === 0 ? 1.9 : 1.2;
+    box.min.set(m.tp.x - hw, m.tp.y, m.tp.z - hw);
+    box.max.set(m.tp.x + hw, m.tp.y + hh, m.tp.z + hw);
     if (rc.intersectBox(box, hitP)) {
       const d = hitP.distanceTo(camera.position);
       if (d < bestD) { bestD = d; bestM = m; }
@@ -1563,14 +1776,21 @@ function updateMobs(dt) {
     while (dy < -Math.PI) dy += Math.PI * 2;
     g.rotation.y += dy * k;
     m.swing += dt * 5;
-    m.mesh.legL.rotation.x = Math.sin(m.swing) * 0.55;
-    m.mesh.legR.rotation.x = -Math.sin(m.swing) * 0.55;
-    // 근접 시 신음 소리 + 접촉 데미지
+    if (m.mesh.legs) { // 동물 4족 보행
+      m.mesh.legs.forEach((leg, li) => { leg.rotation.x = Math.sin(m.swing + (li % 2) * Math.PI) * 0.5; });
+    } else {
+      m.mesh.legL.rotation.x = Math.sin(m.swing) * 0.55;
+      m.mesh.legR.rotation.x = -Math.sin(m.swing) * 0.55;
+    }
+    // 근접 시 울음 소리 + (좀비만) 접촉 데미지
     const dx = g.position.x - pos.x, dyy = g.position.y - pos.y, dz = g.position.z - pos.z;
     const dist2 = dx*dx + dyy*dyy + dz*dz;
     m.groanCd -= dt;
-    if (dist2 < 90 && m.groanCd <= 0 && Math.random() < 0.3) { snd.zomb(); m.groanCd = 3 + Math.random() * 3; }
-    if (!dead && dist2 < 1.6) {
+    if (dist2 < 90 && m.groanCd <= 0 && Math.random() < 0.3) {
+      if (m.type === 0) snd.zomb(); else if (m.type === 1) snd.oink(); else snd.moo();
+      m.groanCd = 3 + Math.random() * 4;
+    }
+    if (!dead && MOB_DEF[m.type].hostile && dist2 < 1.6) {
       const now = performance.now() / 1000;
       if (now - lastMobHurt > 1.0) {
         lastMobHurt = now;
@@ -1637,9 +1857,9 @@ function handleMsg(m) {
   } else if (m.t === 'mobs') {
     if (isHost()) return; // 내가 호스트면 내 시뮬레이션이 진실
     const seen = new Set();
-    for (const [i, x, y, z, yaw, mhp] of m.l) {
+    for (const [i, type, x, y, z, yaw, mhp] of m.l) {
       seen.add(i);
-      const mob = ensureMob(i);
+      const mob = ensureMob(i, type);
       mob.tp.set(x, y, z);
       mob.tyaw = yaw;
       mob.hp = mhp;
@@ -1853,21 +2073,23 @@ function buildInv() {
   crafts.style.width = '100%';
   const ttl = document.createElement('div'); ttl.className = 'ttl'; ttl.textContent = '✦ 제작';
   crafts.appendChild(ttl);
+  const hasFurnace = nearFurnace();
   for (const r of RECIPES) {
     const row = document.createElement('div'); row.className = 'recipe';
     const c = document.createElement('canvas'); c.width = c.height = 34;
     drawItemIcon(c.getContext('2d'), r.out[0], 17, 17, 8);
     const body = document.createElement('div'); body.className = 'rbody';
     const nm = document.createElement('div'); nm.className = 'rname';
-    nm.textContent = `${itemName(r.out[0])} ×${r.out[1]}`;
+    nm.textContent = (r.furnace ? '🔥 ' : '') + `${itemName(r.out[0])} ×${r.out[1]}`;
     const cost = document.createElement('div'); cost.className = 'rcost';
-    cost.textContent = '필요: ' + r.ins.map(([id, n]) => `${itemName(id)} ×${n}`).join(', ');
+    cost.textContent = (r.furnace && !hasFurnace ? '⚠ 화로 근처에서만 · ' : '') +
+      '필요: ' + r.ins.map(([id, n]) => `${itemName(id)} ×${n}`).join(', ');
     body.appendChild(nm); body.appendChild(cost);
     const btn = document.createElement('button');
     btn.textContent = '만들기';
-    btn.disabled = !r.ins.every(([id, n]) => countOf(id) >= n);
+    btn.disabled = !r.ins.every(([id, n]) => countOf(id) >= n) || (r.furnace && !hasFurnace);
     btn.onclick = () => {
-      if (!r.ins.every(([id, n]) => countOf(id) >= n)) return;
+      if (btn.disabled) return;
       r.ins.forEach(([id, n]) => takeItem(id, n));
       addItem(r.out[0], r.out[1]);
       snd.craft();
@@ -2093,7 +2315,7 @@ async function startGame() {
   }
   if (survival) {
     hotbar.fill(null);
-    hp = 10; airLv = 10; dead = false;
+    hp = 10; airLv = 10; hunger = 10; dead = false;
   }
   updateSurvivalHUD();
 
@@ -2169,16 +2391,24 @@ function frame(now) {
     updateHolds(dt);
   }
 
-  // 서바이벌: 산소·체력 재생
+  // 서바이벌: 산소·배고픔·체력 재생
   if (survival && !dead) {
     if (waterAt(camera.position.x, camera.position.y, camera.position.z)) {
       airLv = Math.max(0, airLv - dt * 1.1);
       if (airLv <= 0) { drownAcc += dt; if (drownAcc > 1.2) { drownAcc = 0; damage(1, '익사'); } }
     } else { airLv = 10; drownAcc = 0; }
+    // 배고픔: 시간이 지나며 줄고, 질주하면 더 빨리
+    hungerAcc += dt * (sprinting ? 2.6 : 1);
+    if (hungerAcc > 38) { hungerAcc = 0; hunger = Math.max(0, hunger - 1); }
+    if (hunger <= 0) {
+      starveAcc += dt;
+      if (starveAcc > 3 && hp > 1) { starveAcc = 0; damage(1, '굶주림'); }
+    } else starveAcc = 0;
+    // 재생: 배부를 때만 (배고픔 소모)
     const nowS = performance.now() / 1000;
-    if (hp < 10 && nowS - lastDmgT > 8) {
+    if (hp < 10 && hunger >= 7 && nowS - lastDmgT > 8) {
       regenAcc += dt;
-      if (regenAcc > 4) { regenAcc = 0; hp = Math.min(10, hp + 1); }
+      if (regenAcc > 4) { regenAcc = 0; hp = Math.min(10, hp + 1); hungerAcc += 14; }
     }
     updateSurvivalHUD();
   }
