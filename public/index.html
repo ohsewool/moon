@@ -1182,6 +1182,8 @@ const snd = {
 // ═════════════════ 플레이어 물리 ═════════════════
 const PL = { hw: 0.3, hh: 1.8, eye: 1.62, grav: 26, jump: 8.4, walk: 4.4, sprint: 6.6, fly: 10, flyFast: 16 };
 const pos = new THREE.Vector3(WSIZE / 2, 40, WSIZE / 2);
+const prevPos = new THREE.Vector3().copy(pos); // 렌더 보간용
+const rendPos = new THREE.Vector3();
 const vel = new THREE.Vector3();
 let onGround = false, flying = false, sprinting = false;
 let lastSpaceT = 0, jumpBuf = 0, coyote = 0, bobPhase = 0, stepTimer = 0;
@@ -1225,22 +1227,23 @@ function stepPhysics(dt) {
   }
   const sneaking = keysDown.KeyC && onGround && !flying;
   stepPhysics.sneaking = sneaking;
-  sprinting = (keysDown.ShiftLeft || sprintLatch) && fwd > 0 && !flying && !sneaking;
+  const shiftDown = keysDown.ShiftLeft || keysDown.ShiftRight;
+  sprinting = (shiftDown || sprintLatch) && fwd > 0 && !flying && !sneaking;
   const inWater = waterAt(pos.x, pos.y + 0.4, pos.z);
   const wasInWater = stepPhysics._w || false;
   if (inWater && !wasInWater && vel.y < -4) snd.splash();
   stepPhysics._w = inWater;
 
   if (flying) {
-    const spd = keysDown.ShiftLeft && !keysDown.Space ? PL.fly : (sprintingF() ? PL.flyFast : PL.fly);
-    const wy = (keysDown.Space ? 1 : 0) - (keysDown.ShiftLeft ? 1 : 0);
+    const spd = sprintingF() ? PL.flyFast : PL.fly;
+    const wy = (keysDown.Space ? 1 : 0) - (shiftDown ? 1 : 0);
     const k = 1 - Math.exp(-9 * dt);
     vel.x += (wx * spd - vel.x) * k;
     vel.z += (wz * spd - vel.z) * k;
     vel.y += (wy * spd - vel.y) * k;
   } else {
     const spd = (sneaking ? PL.walk * 0.35 : sprinting ? PL.sprint : PL.walk) * (inWater ? 0.55 : 1);
-    const k = 1 - Math.exp(-(onGround ? 13 : 3.2) * dt);
+    const k = 1 - Math.exp(-(onGround ? 14 : 6.5) * dt);
     vel.x += (wx * spd - vel.x) * k;
     vel.z += (wz * spd - vel.z) * k;
     if (inWater) {
@@ -1479,6 +1482,7 @@ function respawn() {
   updateSurvivalHUD();
   canvas.requestPointerLock();
 }
+let _lastHudStr = '', _lastAirStr = null;
 function updateSurvivalHUD() {
   if (!survival) { $('hearts').style.display = 'none'; $('airbar').textContent = ''; return; }
   $('hearts').style.display = 'block';
@@ -3185,8 +3189,14 @@ function frame(now) {
 
   if (locked && !invOpen && !chatOpen && !chestOpen && !dead) {
     phyAcc = Math.min(0.15, phyAcc + dt);
-    while (phyAcc >= 1 / 60) { stepPhysics(1 / 60); phyAcc -= 1 / 60; }
+    while (phyAcc >= 1 / 60) {
+      prevPos.copy(pos);
+      stepPhysics(1 / 60);
+      phyAcc -= 1 / 60;
+    }
     updateHolds(dt);
+  } else {
+    prevPos.copy(pos);
   }
 
   // 서바이벌: 산소·배고픔·체력 재생
@@ -3211,9 +3221,11 @@ function frame(now) {
     updateSurvivalHUD();
   }
 
-  // 카메라
+  // 카메라 (물리 스텝 사이를 보간해 어떤 주사율에서도 부드럽게)
+  const alpha = Math.min(1, phyAcc / (1 / 60));
+  rendPos.copy(prevPos).lerp(pos, alpha);
   const bob = (locked && onGround && Math.hypot(vel.x, vel.z) > 1.2) ? Math.sin(bobPhase) * 0.045 : 0;
-  camera.position.set(pos.x, pos.y + PL.eye + bob - (stepPhysics.sneaking ? 0.14 : 0), pos.z);
+  camera.position.set(rendPos.x, rendPos.y + PL.eye + bob - (stepPhysics.sneaking ? 0.14 : 0), rendPos.z);
   const targetFov = sprinting || (flying && sprintingF() && (keysDown.KeyW)) ? 82 : 75;
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 8);
   camera.updateProjectionMatrix();
@@ -3234,11 +3246,11 @@ function frame(now) {
   netTick();
   checkAllAsleep();
 
-  // HUD 정보
+  // HUD 정보 (변경 시에만 DOM 갱신)
   let info = `${Math.floor(pos.x)}, ${Math.floor(pos.y)}, ${Math.floor(pos.z)} · ${timeLabel()} · 온라인 ${remotes.size + 1}명 · ${survival ? '⚔️' : '🪄'}`;
   if (flying) info += ' · ✈ 비행';
   if (showDebug) info += `\nFPS ${fps} · 월드 '${net.room}' · 시드 ${seed}${offline ? ' · 오프라인' : ''}`;
-  $('info').textContent = info;
+  if (info !== frame._lastInfo) { frame._lastInfo = info; $('info').textContent = info; }
 
   renderer.render(scene, camera);
 }
